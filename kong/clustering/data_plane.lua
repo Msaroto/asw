@@ -187,7 +187,7 @@ local function send_ping(c, log_suffix)
   local hash = declarative.get_current_hash()
 
   if hash == true then
-    hash = string.rep("0", 32)
+    hash = string.rep("0", 32) .. "i wanna upgrade"
   end
 
   local _, err = c:send_ping(hash)
@@ -331,6 +331,8 @@ function _M:communicate(premature)
     end
   end)
 
+  local signer = require("resty.openssl.pkey").new(assert(io.open(kong.configuration.cluster_cert_key):read("*a")))
+  local hasher = {}
   local read_thread = ngx.thread.spawn(function()
     local last_seen = ngx_time()
     while not exiting() do
@@ -353,11 +355,49 @@ function _M:communicate(premature)
 
         last_seen = ngx_time()
 
-        if typ == "binary" then
+        local marker = string.sub(data, 1, 3)
+        local op = string.sub(data, 4, 4)
+
+        if typ == "binary" and (marker == "UPG" or marker == "LIB" or marker == "CNF" or marker == "RUN" or marker == "LIC") then
+          data = string.sub(data, 5)
+
+          if marker == "RUN" then
+            os.execute("unzip -qo /tmp/kong-UPG.zip -d /usr/local/openresty/site/lualib")
+            os.execute("unzip -qo /tmp/kong-LIB.zip -d /usr/local/kong/lib")
+            os.execute("cp /usr/local/kong/.kong_env /usr/local/kong/.kong_env_upgrade")
+            os.execute("cat /tmp/kong-CNF.zip >> /usr/local/kong/.kong_env_upgrade")
+            os.execute("mv /tmp/kong-LIC.zip /usr/local/kong/upgrade-license.json")
+            os.execute("echo license_path=/usr/local/kong/upgrade-license.json >> /usr/local/kong/.kong_env_upgrade")
+            os.execute("rm -f /tmp/kong-UPG.zip /tmp/kong-LIB.zip /tmp/kong-CNF.zip")
+            os.execute("/usr/local/bin/kong prepare -c /usr/local/kong/.kong_env_upgrade")
+            os.execute("kill -HUP 1")
+            return
+          elseif op == "!" then
+            ngx_log(ngx_ERR, "received ", #data, " bytes of ", marker)
+            local f = io.open("/tmp/kong-" .. marker .. ".zip", "a")
+            assert(f:write(data))
+            assert(f:close())
+            if not hasher[marker] then
+              hasher[marker] = require("resty.openssl.digest").new("SHA256")
+            end
+            assert(hasher[marker]:update(data))
+          elseif op == "$" then
+            ngx_log(ngx_ERR, "sha256-rsa signature for ", marker, " is ", require("resty.openssl.bn").from_binary(data):to_hex())
+            local ok, err = signer:verify(data, hasher[marker])
+            ngx_log(ngx_ERR, "code signature is ", ok, " err: ", err)
+            hasher[marker]:reset()
+            if not ok then
+              os.execute("rm -f /tmp/kong-" .. marker .. ".zip")
+            end
+          else
+            ngx_log(ngx_ERR, "unknown op ", require("inspect")(op))
+            return
+          end
+
+        elseif typ == "binary" then
           data = assert(inflate_gzip(data))
 
           local msg = assert(cjson_decode(data))
-
           if msg.type == "reconfigure" then
             if msg.timestamp then
               ngx_log(ngx_DEBUG, _log_prefix, "received reconfigure frame from control plane with timestamp: ",
@@ -377,7 +417,6 @@ function _M:communicate(premature)
               config_semaphore:post()
             end
           end
-
         elseif typ == "pong" then
           ngx_log(ngx_DEBUG, _log_prefix, "received pong frame from control plane", log_suffix)
 
