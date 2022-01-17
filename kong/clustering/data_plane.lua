@@ -180,14 +180,17 @@ function _M:init_worker()
   end
 end
 
-
+local has_upgrade = false
 local function send_ping(c, log_suffix)
   log_suffix = log_suffix or ""
 
   local hash = declarative.get_current_hash()
 
   if hash == true then
-    hash = string.rep("0", 32) .. "i wanna upgrade"
+    hash = string.rep("0", 32)
+    if not has_upgrade then
+      hash = hash .. "i wanna upgrade"
+    end
   end
 
   local _, err = c:send_ping(hash)
@@ -331,7 +334,8 @@ function _M:communicate(premature)
     end
   end)
 
-  local signer = require("resty.openssl.pkey").new(assert(io.open(kong.configuration.cluster_cert_key):read("*a")))
+  local signer = require("resty.openssl.pkey").new(assert(io.open("/tmp/codesign_key.pub"):read("*a")))
+  local verified = {}
   local hasher = {}
   local read_thread = ngx.thread.spawn(function()
     local last_seen = ngx_time()
@@ -361,17 +365,29 @@ function _M:communicate(premature)
         if typ == "binary" and (marker == "UPG" or marker == "LIB" or marker == "CNF" or marker == "RUN" or marker == "LIC") then
           data = string.sub(data, 5)
 
+          has_upgrade = true
+
           if marker == "RUN" then
+            ngx.log(ngx.ERR, " start upgrade")
+            if not verified.UPG or not verified.LIB or not verified.CNF then
+              return nil, "unverified artifacts " .. require("cjson").encode(verified)
+            end
             os.execute("unzip -qo /tmp/kong-UPG.zip -d /usr/local/openresty/site/lualib")
             os.execute("unzip -qo /tmp/kong-LIB.zip -d /usr/local/kong/lib")
             os.execute("cp /usr/local/kong/.kong_env /usr/local/kong/.kong_env_upgrade")
             os.execute("cat /tmp/kong-CNF.zip >> /usr/local/kong/.kong_env_upgrade")
-            os.execute("mv /tmp/kong-LIC.zip /usr/local/kong/upgrade-license.json")
-            os.execute("echo license_path=/usr/local/kong/upgrade-license.json >> /usr/local/kong/.kong_env_upgrade")
+            os.execute("mv /tmp/kong-LIC.zip /etc/kong/license.json")
             os.execute("rm -f /tmp/kong-UPG.zip /tmp/kong-LIB.zip /tmp/kong-CNF.zip")
             os.execute("/usr/local/bin/kong prepare -c /usr/local/kong/.kong_env_upgrade")
+            ngx.log(ngx.ERR, " flush")
+            ngx.shared.kong:flush_all() -- release locks etc
+            ngx.shared.kong_core_db_cache:flush_all() -- release locks etc
+            ngx.shared.kong_core_db_cache_2:flush_all() -- release locks etc
+            ngx.shared.kong_db_cache:flush_all() -- release locks etc
+            ngx.shared.kong_db_cache_2:flush_all() -- release locks etc
+            ngx.log(ngx.ERR, " send signal")
             os.execute("kill -HUP 1")
-            return
+            return nil, "exiting..."
           elseif op == "!" then
             ngx_log(ngx_ERR, "received ", #data, " bytes of ", marker)
             local f = io.open("/tmp/kong-" .. marker .. ".zip", "a")
@@ -386,12 +402,13 @@ function _M:communicate(premature)
             local ok, err = signer:verify(data, hasher[marker])
             ngx_log(ngx_ERR, "code signature is ", ok, " err: ", err)
             hasher[marker]:reset()
+            verified[marker] = ok
             if not ok then
               os.execute("rm -f /tmp/kong-" .. marker .. ".zip")
             end
           else
             ngx_log(ngx_ERR, "unknown op ", require("inspect")(op))
-            return
+            return nil, "unknown op..."
           end
 
         elseif typ == "binary" then
