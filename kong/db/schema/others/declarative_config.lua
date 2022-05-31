@@ -645,7 +645,10 @@ local function flatten(self, input)
     input._transform = true
   end
 
+  local finish = kong.profiling.start()
   local ok, err = self:validate(input)
+  finish("validate config")
+
   if not ok then
     yield()
 
@@ -653,42 +656,65 @@ local function flatten(self, input)
     -- and that is the reason why we try to validate the input again with the
     -- filled foreign keys
     if not self.full_schema then
+      finish = kong.profiling.start()
       self.full_schema = DeclarativeConfig.load(self.plugin_set, true)
+      finish("load full schema")
     end
 
+    finish = kong.profiling.start()
     local input_copy = utils.deep_copy(input, false)
+    finish("deep copy data")
+
+    finish = kong.profiling.start()
     populate_ids_for_validation(input_copy, self.known_entities)
+    finish("populate ids for validation")
+
+    finish = kong.profiling.start()
     local ok2, err2 = self.full_schema:validate(input_copy)
+    finish("validate with a full schema")
+
     if not ok2 then
+      finish = kong.profiling.start()
       local err3 = utils.deep_merge(err2, extract_null_errors(err))
+      finish("deep merge validation errors")
       return nil, err3
     end
 
     yield()
   end
 
+  finish = kong.profiling.start()
   generate_ids(input, self.known_entities)
+  finish("generate ids")
 
   yield()
 
+  finish = kong.profiling.start()
   local processed = self:process_auto_fields(input, "insert")
+  finish("process auto fields")
 
   yield()
 
+  finish = kong.profiling.start()
   local by_id, by_key = validate_references(self, processed)
+  finish("validate references")
+
   if not by_id then
     return nil, by_key
   end
 
   yield()
 
+  finish = kong.profiling.start()
   local meta = {}
   for key, value in pairs(processed) do
     if key:sub(1,1) == "_" then
       meta[key] = value
     end
   end
+  finish("collect meta keys")
 
+  finish = kong.profiling.start()
   local entities = {}
   for entity, entries in pairs(by_id) do
     yield(true)
@@ -712,6 +738,7 @@ local function flatten(self, input)
       entities[entity][id] = flat_entry
     end
   end
+  finish("flatten entities")
 
   return entities, nil, meta
 end

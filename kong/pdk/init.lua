@@ -220,6 +220,7 @@ local MAJOR_VERSIONS = {
       "table",
       "node",
       "log",
+      "profiling",
       "ctx",
       "ip",
       "client",

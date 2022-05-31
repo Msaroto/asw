@@ -138,7 +138,9 @@ end
 
 function _M:calculate_config_hash(config_table)
   if type(config_table) ~= "table" then
+    local finish = kong.profiling.start()
     local config_hash = ngx_md5(to_sorted_string(config_table))
+    finish("calculate non-table config hash")
     return config_hash, { config = config_hash }
   end
 
@@ -148,11 +150,21 @@ function _M:calculate_config_hash(config_table)
   local upstreams = config_table.upstreams
   local targets   = config_table.targets
 
+  local finish = kong.profiling.start()
   local routes_hash    = routes    and ngx_md5(to_sorted_string(routes))    or DECLARATIVE_EMPTY_CONFIG_HASH
+  finish("calculate routes hash")
+  finish = kong.profiling.start()
   local services_hash  = services  and ngx_md5(to_sorted_string(services))  or DECLARATIVE_EMPTY_CONFIG_HASH
+  finish("calculate services hash")
+  finish = kong.profiling.start()
   local plugins_hash   = plugins   and ngx_md5(to_sorted_string(plugins))   or DECLARATIVE_EMPTY_CONFIG_HASH
+  finish("calculate plugins hash")
+  finish = kong.profiling.start()
   local upstreams_hash = upstreams and ngx_md5(to_sorted_string(upstreams)) or DECLARATIVE_EMPTY_CONFIG_HASH
+  finish("calculate upstreams hash")
+  finish = kong.profiling.start()
   local targets_hash   = targets   and ngx_md5(to_sorted_string(targets))   or DECLARATIVE_EMPTY_CONFIG_HASH
+  finish("calculate targets hash")
 
   config_table.routes    = nil
   config_table.services  = nil
@@ -160,11 +172,13 @@ function _M:calculate_config_hash(config_table)
   config_table.upstreams = nil
   config_table.targets   = nil
 
+  finish = kong.profiling.start()
   local config_hash = ngx_md5(to_sorted_string(config_table) .. routes_hash
                                                              .. services_hash
                                                              .. plugins_hash
                                                              .. upstreams_hash
                                                              .. targets_hash)
+  finish("calculate config hash")
 
   config_table.routes    = routes
   config_table.services  = services

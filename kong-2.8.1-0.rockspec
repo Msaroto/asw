@@ -242,6 +242,7 @@ build = {
     ["kong.pdk.response"] = "kong/pdk/response.lua",
     ["kong.pdk.table"] = "kong/pdk/table.lua",
     ["kong.pdk.node"] = "kong/pdk/node.lua",
+    ["kong.pdk.profiling"] = "kong/pdk/profiling.lua",
     ["kong.pdk.nginx"] = "kong/pdk/nginx.lua",
     ["kong.pdk.cluster"] = "kong/pdk/cluster.lua",
     ["kong.pdk.vault"] = "kong/pdk/vault.lua",

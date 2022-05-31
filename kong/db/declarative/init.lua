@@ -274,7 +274,9 @@ function Config:parse_table(dc_table, hash)
     error("expected a table as input", 2)
   end
 
+  local finish = kong.profiling.start()
   local entities, err_t, meta = self.schema:flatten(dc_table)
+  finish("flatten config")
   if err_t then
     return nil, pretty_print_error(err_t), err_t
   end
@@ -282,11 +284,15 @@ function Config:parse_table(dc_table, hash)
   yield()
 
   if not self.partial then
+    finish = kong.profiling.start()
     self.schema:insert_default_workspace_if_not_given(entities)
+    finish("insert default workspace if not given")
   end
 
   if not hash then
+    finish = kong.profiling.start()
     hash = md5(cjson.encode({ entities, meta }))
+    finish("md5/json encode entities")
   end
 
   return entities, nil, nil, meta, hash
@@ -359,6 +365,7 @@ function declarative.load_into_db(entities, meta)
 
   local db = kong.db
 
+  local finish = kong.profiling.start()
   local schemas = {}
   for entity_name in pairs(entities) do
     local entity = db[entity_name]
@@ -368,15 +375,23 @@ function declarative.load_into_db(entities, meta)
       return nil, "unknown entity: " .. entity_name
     end
   end
+  finish("load entity schemas")
+
+  finish = kong.profiling.start()
   local sorted_schemas, err = schema_topological_sort(schemas)
   if not sorted_schemas then
     return nil, err
   end
+  finish("topologically sort schemas")
 
+  finish = kong.profiling.start()
   local _, err, err_t = find_or_create_current_workspace("default")
   if err then
     return nil, err, err_t
   end
+  finish("find or create current workspace")
+
+  finish = kong.profiling.start()
 
   local options = {
     transform = meta._transform,
@@ -384,6 +399,7 @@ function declarative.load_into_db(entities, meta)
   local schema, primary_key, ok, err, err_t
   for i = 1, #sorted_schemas do
     schema = sorted_schemas[i]
+    local done = kong.profiling.start()
     for _, entity in pairs(entities[schema.name]) do
       entity = deepcopy(entity)
       entity._tags = nil
@@ -396,7 +412,10 @@ function declarative.load_into_db(entities, meta)
         return nil, err, err_t
       end
     end
+    done("upserting data for ", sorted_schemas[i].name)
   end
+
+  finish("upserting data to db")
 
   return true
 end
@@ -407,21 +426,30 @@ local function export_from_db(emitter, skip_ws, skip_disabled_entities)
 
   local db = kong.db
 
+  local finish = kong.profiling.start()
   for _, dao in pairs(db.daos) do
     if not (skip_ws and dao.schema.name == "workspaces") then
       insert(schemas, dao.schema)
     end
   end
+  finish("including workspace schema")
+
+  finish = kong.profiling.start()
   local sorted_schemas, err = schema_topological_sort(schemas)
+  finish("topologically sorting schemas")
+
   if not sorted_schemas then
     return nil, err
   end
 
+  finish = kong.profiling.start()
   emitter:emit_toplevel({
     _format_version = "2.1",
     _transform = false,
   })
+  finish("emitting top level")
 
+  finish = kong.profiling.start()
   local disabled_services = {}
   for i = 1, #sorted_schemas do
     local schema = sorted_schemas[i]
@@ -436,6 +464,8 @@ local function export_from_db(emitter, skip_ws, skip_disabled_entities)
         insert(fks, field_name)
       end
     end
+
+    local done = kong.profiling.start()
 
     local page_size = db[name].pagination.max_page_size
     for row, err in db[name]:each(page_size, GLOBAL_QUERY_OPTS) do
@@ -470,8 +500,11 @@ local function export_from_db(emitter, skip_ws, skip_disabled_entities)
       ::skip_emit::
     end
 
+    done("exporting ", name)
+
     ::continue::
   end
+  finish("emitting data")
 
   return emitter:done()
 end
@@ -602,7 +635,10 @@ function declarative.load_into_cache(entities, meta, hash, shadow)
   local tags = {}
   meta = meta or {}
 
+  local finish = kong.profiling.start()
   local default_workspace = assert(find_default_ws(entities))
+  finish("find default workspace")
+
   local fallback_workspace = default_workspace
 
   assert(type(fallback_workspace) == "string")
@@ -621,11 +657,14 @@ function declarative.load_into_cache(entities, meta, hash, shadow)
   local core_cache = kong.core_cache
   local cache = kong.cache
 
+  finish = kong.profiling.start()
   core_cache:purge(shadow)
   cache:purge(shadow)
+  finish("purge shadow cache")
 
   local transform = meta._transform == nil and true or meta._transform
 
+  finish = kong.profiling.start()
   for entity_name, items in pairs(entities) do
     yield()
 
@@ -830,7 +869,9 @@ function declarative.load_into_cache(entities, meta, hash, shadow)
       end
     end
   end
+  finish("load entities into cache")
 
+  finish = kong.profiling.start()
   for tag_name, tags in pairs(tags_by_name) do
     yield()
 
@@ -849,6 +890,7 @@ function declarative.load_into_cache(entities, meta, hash, shadow)
   if not ok then
     return nil, err
   end
+  finish("load tag lists")
 
   -- set the value of the configuration hash. The value can be nil, which
   -- indicates that no configuration has been applied yet to the Gateway.
@@ -872,7 +914,9 @@ do
 
     local kong_shm = ngx.shared.kong
 
+    local finish = kong.profiling.start()
     local ok, err = declarative.try_lock()
+    finish("acquire declarative lock")
     if not ok then
       if err == "exists" then
         local ttl = math.min(ngx.shared.kong:ttl(DECLARATIVE_LOCK_KEY), 10)
@@ -886,7 +930,10 @@ do
     local worker_events = kong.worker_events
 
     -- ensure any previous update finished (we're flipped to the latest page)
+    finish = kong.profiling.start()
     ok, err = worker_events.poll()
+    finish("poll events")
+
     if not ok then
       kong_shm:delete(DECLARATIVE_LOCK_KEY)
       return nil, err
@@ -899,15 +946,24 @@ do
       -- TODO: remove this once shdict can be shared between subsystems
 
       local sock = ngx_socket_tcp()
+      finish = kong.profiling.start()
       ok, err = sock:connect("unix:" .. PREFIX .. "/stream_config.sock")
+      finish("connect stream socket")
+
       if not ok then
         kong_shm:delete(DECLARATIVE_LOCK_KEY)
         return nil, err
       end
 
+      finish = kong.profiling.start()
       local json = cjson.encode({ entities, meta, hash, })
+      finish("json encode entities")
+
       local bytes
+      finish = kong.profiling.start()
       bytes, err = sock:send(json)
+      finish("send encoded entities")
+
       sock:close()
 
       if not bytes then
@@ -924,7 +980,11 @@ do
     end
 
     local default_ws
+
+    finish = kong.profiling.start()
     ok, err, default_ws = declarative.load_into_cache(entities, meta, hash, SHADOW)
+    finish("load into cache")
+
     if ok then
       local router_hash
       local plugins_hash
@@ -945,12 +1005,15 @@ do
         end
       end
 
+      finish = kong.profiling.start()
       ok, err = worker_events.post("declarative", "flip_config", {
         default_ws,
         router_hash,
         plugins_hash,
         balancer_hash
       })
+      finish("post flip config event")
+
       if ok ~= "done" then
         kong_shm:delete(DECLARATIVE_LOCK_KEY)
         return nil, "failed to flip declarative config cache pages: " .. (err or ok)
@@ -975,6 +1038,8 @@ do
     local sleep_left = DECLARATIVE_LOCK_TTL
     local sleep_time = 0.0375
 
+    finish = kong.profiling.start()
+
     while sleep_left > 0 do
       local flips = kong_shm:get(DECLARATIVE_LOCK_KEY)
       if flips == nil or flips >= WORKER_COUNT then
@@ -989,12 +1054,15 @@ do
       sleep(sleep_time)
 
       if exiting() then
+        finish("wait workers to flip config (exiting)")
         kong_shm:delete(DECLARATIVE_LOCK_KEY)
         return nil, "exiting"
       end
 
       sleep_left = sleep_left - sleep_time
     end
+
+    finish("wait workers to flip config")
 
     kong_shm:delete(DECLARATIVE_LOCK_KEY)
 

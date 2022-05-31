@@ -154,22 +154,39 @@ end
 
 
 local function init()
+  local finish = kong.profiling.start()
   targets.init()
+  finish("initialize targets")
+
+  finish = kong.profiling.start()
   upstreams.init()
+  finish("initialize upstreams")
+
+  finish = kong.profiling.start()
   balancers.init()
+  finish("initialize balancers")
+
+  finish = kong.profiling.start()
   healthcheckers.init()
+  finish("initialize health checkers")
 
   if kong.configuration.worker_consistency == "strict" then
+    finish = kong.profiling.start()
     balancers.create_balancers()
+    finish("create balancers")
     return
   end
 
+  finish = kong.profiling.start()
   local upstreams_dict, err = upstreams.get_all_upstreams()
+  finish("get all upstreams")
+
   if err then
     log(CRIT, "failed loading list of upstreams: ", err)
     return
   end
 
+  finish = kong.profiling.start()
   for _, id in pairs(upstreams_dict) do
     local upstream
     upstream, err = upstreams.get_upstream_by_id(id)
@@ -188,6 +205,7 @@ local function init()
       log(WARN, "failed loading targets for upstream ", id, ": ", err)
     end
   end
+  finish("create balancers for each upstream")
 
   local _
   local frequency = kong.configuration.worker_state_update_frequency or 1
