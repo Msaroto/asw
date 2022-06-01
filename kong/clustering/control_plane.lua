@@ -16,6 +16,7 @@ local setmetatable = setmetatable
 local type = type
 local pcall = pcall
 local pairs = pairs
+local yield = utils.yield
 local ipairs = ipairs
 local tonumber = tonumber
 local tostring = tostring
@@ -258,16 +259,24 @@ function _M:export_deflated_reconfigure_payload()
   self.reconfigure_payload = payload
 
   finish = kong.profiling.start()
-  local json = cjson_encode(payload)
+  payload, err = cjson_encode(payload)
   finish("json encode config")
 
+  if not payload then
+    return nil, err
+  end
+
+  yield()
+
   finish = kong.profiling.start()
-  payload, err = deflate_gzip(json)
+  payload, err = deflate_gzip(payload)
   finish("deflate config")
 
   if not payload then
     return nil, err
   end
+
+  yield()
 
   self.current_hashes = hashes
   self.current_config_hash = config_hash

@@ -17,6 +17,7 @@ local assert = assert
 local error = error
 local concat = table.concat
 local pairs = pairs
+local yield = require("kong.tools.utils").yield
 local sort = table.sort
 local type = type
 
@@ -28,6 +29,8 @@ local MT = { __index = _M, }
 
 
 local function to_sorted_string(value)
+  yield(true)
+
   if value == ngx_null then
     return "/null/"
   end

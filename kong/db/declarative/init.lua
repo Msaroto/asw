@@ -662,6 +662,8 @@ function declarative.load_into_cache(entities, meta, hash, shadow)
   cache:purge(shadow)
   finish("purge shadow cache")
 
+  yield()
+
   local transform = meta._transform == nil and true or meta._transform
 
   finish = kong.profiling.start()
@@ -873,7 +875,7 @@ function declarative.load_into_cache(entities, meta, hash, shadow)
 
   finish = kong.profiling.start()
   for tag_name, tags in pairs(tags_by_name) do
-    yield()
+    yield(true)
 
     -- tags:admin|@list -> all tags tagged "admin", regardless of the entity type
     -- each tag is encoded as a string with the format "admin|services|uuid", where uuid is the service uuid
