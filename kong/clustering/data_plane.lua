@@ -26,6 +26,7 @@ local ngx_time = ngx.time
 local io_open = io.open
 local inflate_gzip = utils.inflate_gzip
 local deflate_gzip = utils.deflate_gzip
+local yield = utils.yield
 
 
 local KONG_VERSION = kong.version
@@ -395,7 +396,13 @@ function _M:communicate(premature)
           data = assert(inflate_gzip(data))
           finish("decompress payload")
 
+          yield()
+
+          finish = kong.profiling.start()
           local msg = assert(cjson_decode(data))
+          finish("json decode payload")
+
+          yield()
 
           if msg.type == "reconfigure" then
             finish = kong.profiling.start()
