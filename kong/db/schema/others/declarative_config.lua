@@ -651,9 +651,9 @@ local function flatten(self, input)
     input._transform = true
   end
 
-  local finish = kong.profiling.start()
+  local finish = kong.profiling.start("validate config")
   local ok, err = self:validate(input)
-  finish("validate config")
+  finish()
 
   if not ok then
     yield()
@@ -662,48 +662,48 @@ local function flatten(self, input)
     -- and that is the reason why we try to validate the input again with the
     -- filled foreign keys
     if not self.full_schema then
-      finish = kong.profiling.start()
+      finish = kong.profiling.start("load full schema")
       self.full_schema = DeclarativeConfig.load(self.plugin_set, true)
-      finish("load full schema")
+      finish()
     end
 
-    finish = kong.profiling.start()
+    finish = kong.profiling.start("deep copy data")
     local input_copy = utils.deep_copy(input, false)
-    finish("deep copy data")
+    finish()
 
-    finish = kong.profiling.start()
+    finish = kong.profiling.start("populate ids for validation")
     populate_ids_for_validation(input_copy, self.known_entities)
-    finish("populate ids for validation")
+    finish()
 
-    finish = kong.profiling.start()
+    finish = kong.profiling.start("validate with a full schema")
     local ok2, err2 = self.full_schema:validate(input_copy)
-    finish("validate with a full schema")
+    finish()
 
     if not ok2 then
-      finish = kong.profiling.start()
+      finish = kong.profiling.start("deep merge validation errors")
       local err3 = utils.deep_merge(err2, extract_null_errors(err))
-      finish("deep merge validation errors")
+      finish()
       return nil, err3
     end
 
     yield()
   end
 
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("generate ids")
   generate_ids(input, self.known_entities)
-  finish("generate ids")
+  finish()
 
   yield()
 
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("process auto fields")
   local processed = self:process_auto_fields(input, "insert")
-  finish("process auto fields")
+  finish()
 
   yield()
 
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("validate references")
   local by_id, by_key = validate_references(self, processed)
-  finish("validate references")
+  finish()
 
   if not by_id then
     return nil, by_key
@@ -711,16 +711,16 @@ local function flatten(self, input)
 
   yield()
 
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("collect meta keys")
   local meta = {}
   for key, value in pairs(processed) do
     if key:sub(1,1) == "_" then
       meta[key] = value
     end
   end
-  finish("collect meta keys")
+  finish()
 
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("flatten entities")
   local entities = {}
   for entity, entries in pairs(by_id) do
     yield(true)
@@ -744,7 +744,7 @@ local function flatten(self, input)
       entities[entity][id] = flat_entry
     end
   end
-  finish("flatten entities")
+  finish()
 
   return entities, nil, meta
 end

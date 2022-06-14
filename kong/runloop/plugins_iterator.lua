@@ -430,7 +430,7 @@ function PluginsIterator.new(version)
     error("version must be given", 2)
   end
 
-  local finish = kong.profiling.start()
+  local finish = kong.profiling.start("get enabled plugins and workspace")
 
   loaded_plugins = loaded_plugins or get_loaded_plugins()
   enabled_plugins = enabled_plugins or kong.configuration.loaded_plugins
@@ -440,21 +440,21 @@ function PluginsIterator.new(version)
     [ws_id] = new_ws_data()
   }
 
-  finish("get enabled plugins and workspace")
-  finish = kong.profiling.start()
+  finish()
+  finish = kong.profiling.start("load plugins data")
 
   local cache_full
   local counter = 0
   local page_size = kong.db.plugins.pagination.max_page_size
   for plugin, err in kong.db.plugins:each(page_size, GLOBAL_QUERY_OPTS) do
     if err then
-      finish("load plugins (", err, ")")
+      finish(err)
       return nil, err
     end
 
     local name = plugin.name
     if not enabled_plugins[name] then
-      finish("load plugins (", name, " plugin is in use but not enabled)")
+      finish(name, " plugin is in use but not enabled")
       return nil, name .. " plugin is in use but not enabled"
     end
 
@@ -469,14 +469,14 @@ function PluginsIterator.new(version)
     if kong.core_cache and counter > 0 and counter % page_size == 0 and kong.db.strategy ~= "off" then
       local new_version, err = kong.core_cache:get("plugins_iterator:version", TTL_ZERO, utils.uuid)
       if err then
-        finish("load plugins (failed to retrieve plugins iterator version: ", err , ")")
+        finish("failed to retrieve plugins iterator version: ", err)
         return nil, "failed to retrieve plugins iterator version: " .. err
       end
 
       if new_version ~= version then
         -- the plugins iterator rebuild is being done by a different process at
         -- the same time, stop here and let the other one go for it
-        finish("load plugins (plugins iterator was changed while rebuilding it)")
+        finish("plugins iterator was changed while rebuilding it")
         kong.log.info("plugins iterator was changed while rebuilding it")
         return
       end
@@ -563,7 +563,7 @@ function PluginsIterator.new(version)
           local ok, err = warmup.single_entity(kong.db.plugins, plugin)
           if not ok then
             if err ~= "no memory" then
-              finish("load plugins (", err, ")")
+              finish(err)
               return nil, err
             end
 
@@ -598,8 +598,8 @@ function PluginsIterator.new(version)
     counter = counter + 1
   end
 
-  finish("load plugins data")
-  finish = kong.profiling.start()
+  finish()
+  finish = kong.profiling.start("get information about plugin handlers")
 
   for _, plugin in ipairs(loaded_plugins) do
     local name = plugin.name
@@ -623,7 +623,7 @@ function PluginsIterator.new(version)
     end
   end
 
-  finish("get information about plugin handlers")
+  finish()
 
   return {
     version = version,

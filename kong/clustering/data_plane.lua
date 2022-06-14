@@ -79,14 +79,14 @@ function _M:update_config(config_table, config_hash, update_cache, hashes)
   assert(type(config_table) == "table")
 
   if not config_hash then
-    local finish = kong.profiling.start()
+    local finish = kong.profiling.start("calculate hash")
     config_hash, hashes = self:calculate_config_hash(config_table)
-    finish("calculate hash")
+    finish()
   end
 
-  local finish = kong.profiling.start()
+  local finish = kong.profiling.start("get current hash")
   local current_hash = declarative.get_current_hash()
-  finish("get current hash")
+  finish()
 
   if current_hash == config_hash then
     ngx_log(ngx_DEBUG, _log_prefix, "same config received from control plane, ",
@@ -94,10 +94,10 @@ function _M:update_config(config_table, config_hash, update_cache, hashes)
     return true
   end
 
-  local finish = kong.profiling.start()
+  local finish = kong.profiling.start("parse config table")
   local entities, err, _, meta, new_hash =
     self.declarative_config:parse_table(config_table, config_hash)
-  finish("parse config table")
+  finish()
   if not entities then
     return nil, "bad config received from control plane " .. err
   end
@@ -112,10 +112,10 @@ function _M:update_config(config_table, config_hash, update_cache, hashes)
   -- NOTE: no worker mutex needed as this code can only be
   -- executed by worker 0
 
-  local finish = kong.profiling.start()
+  local finish = kong.profiling.start("load into cache with events")
   local res, err =
     declarative.load_into_cache_with_events(entities, meta, new_hash, hashes)
-  finish("load into cache with events")
+  finish()
 
   if not res then
     return nil, err
@@ -123,23 +123,23 @@ function _M:update_config(config_table, config_hash, update_cache, hashes)
 
   if update_cache then
     -- local persistence only after load finishes without error
-    local finish = kong.profiling.start()
+    local finish = kong.profiling.start("write config cache")
     local f, err = io_open(CONFIG_CACHE, "w")
     if not f then
       ngx_log(ngx_ERR, _log_prefix, "unable to open config cache file: ", err)
 
     else
-      local done = kong.profiling.start()
+      local done = kong.profiling.start("json encode config")
       local config = assert(cjson_encode(config_table))
-      done("json encode config")
+      done()
 
-      done = kong.profiling.start()
+      done = kong.profiling.start("encode config")
       config = assert(self:encode_config(config))
-      done("encode config")
+      done()
 
-      done = kong.profiling.start()
+      done = kong.profiling.start("write config")
       res, err = f:write(config)
-      done("write config")
+      done()
 
       if not res then
         ngx_log(ngx_ERR, _log_prefix, "unable to write config cache file: ", err)
@@ -147,7 +147,7 @@ function _M:update_config(config_table, config_hash, update_cache, hashes)
 
       f:close()
     end
-    finish("write config cache")
+    finish()
   end
 
   return true
@@ -321,7 +321,7 @@ function _M:communicate(premature)
       if ok then
         local config_table = self.next_config
         if config_table then
-          local finish = kong.profiling.start()
+          local finish = kong.profiling.start("update config")
 
           local config_hash  = self.next_hash
           local hashes = self.next_hashes
@@ -343,7 +343,7 @@ function _M:communicate(premature)
             self.next_config = nil
           end
 
-          finish("update config")
+          finish()
         end
 
       elseif err ~= "timeout" then
@@ -392,20 +392,20 @@ function _M:communicate(premature)
         last_seen = ngx_time()
 
         if typ == "binary" then
-          local finish = kong.profiling.start()
+          local finish = kong.profiling.start("decompress payload")
           data = assert(inflate_gzip(data))
-          finish("decompress payload")
+          finish()
 
           yield()
 
-          finish = kong.profiling.start()
+          finish = kong.profiling.start("json decode payload")
           local msg = assert(cjson_decode(data))
-          finish("json decode payload")
+          finish()
 
           yield()
 
           if msg.type == "reconfigure" then
-            finish = kong.profiling.start()
+            finish = kong.profiling.start("post to config semaphore")
 
             if msg.timestamp then
               ngx_log(ngx_DEBUG, _log_prefix, "received reconfigure frame from control plane with timestamp: ",
@@ -426,7 +426,7 @@ function _M:communicate(premature)
               config_semaphore:post()
             end
 
-            finish("post to config semaphore")
+            finish()
           end
 
         elseif typ == "pong" then

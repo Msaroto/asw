@@ -369,7 +369,7 @@ local function register_events()
         return true
       end
 
-      local finish = kong.profiling.start()
+      local finish = kong.profiling.start("flip config")
 
       local default_ws
       local router_hash
@@ -386,52 +386,52 @@ local function register_events()
       local ok, err = concurrency.with_coroutine_mutex(FLIP_CONFIG_OPTS, function()
         local rebuild_balancer = balancer_hash == nil or balancer_hash ~= current_balancer_hash
         if rebuild_balancer then
-          local done = kong.profiling.start()
+          local done = kong.profiling.start("stop health checkers")
           balancer.stop_healthcheckers(CLEAR_HEALTH_STATUS_DELAY)
-          done("stop health checkers")
+          done()
         end
 
-        local done = kong.profiling.start()
+        local done = kong.profiling.start("flip caches")
         kong.cache:flip()
         core_cache:flip()
-        done("flip caches")
+        done()
 
         kong.default_workspace = default_ws
         ngx.ctx.workspace = kong.default_workspace
 
         if plugins_hash == nil or plugins_hash ~= current_plugins_hash then
-          done = kong.profiling.start()
+          done = kong.profiling.start("rebuild plugins iterator")
           rebuild_plugins_iterator(PLUGINS_ITERATOR_SYNC_OPTS)
-          done("rebuild plugins iterator")
+          done()
 
           current_plugins_hash = plugins_hash
         end
 
         if router_hash == nil or router_hash ~= current_router_hash then
-          done = kong.profiling.start()
+          done = kong.profiling.start("rebuild router")
           rebuild_router(ROUTER_SYNC_OPTS)
-          done("rebuild router")
+          done()
 
           current_router_hash = router_hash
         end
 
         if rebuild_balancer then
-          done = kong.profiling.start()
+          done = kong.profiling.start("initialize balancer")
           balancer.init()
-          done("initialize balancer")
+          done()
 
           current_balancer_hash = balancer_hash
         end
 
         declarative.lock()
 
-        finish("flip config")
+        finish()
 
         return true
       end)
 
       if not ok then
-        finish("flip config (", err, ")")
+        finish(err)
         log(ERR, "config flip failed: ", err)
       end
     end, "declarative", "flip_config")
@@ -778,9 +778,9 @@ do
     -- instead
     local services_init_cache = {}
     if not kong.core_cache and db.strategy ~= "off" then
-      local finish = kong.profiling.start()
+      local finish = kong.profiling.start("build services cache")
       services_init_cache, err = build_services_init_cache(db)
-      finish("build services cache")
+      finish()
       if err then
         services_init_cache = {}
         log(WARN, "could not build services init cache: ", err)
@@ -790,11 +790,11 @@ do
     local counter = 0
     local page_size = db.routes.pagination.max_page_size
 
-    local finish = kong.profiling.start()
+    local finish = kong.profiling.start("load routes")
 
     for route, err in db.routes:each(page_size, GLOBAL_QUERY_OPTS) do
       if err then
-        finish("load routes (", err, ")")
+        finish(err)
         return nil, "could not load routes: " .. err
       end
 
@@ -802,12 +802,12 @@ do
         if kong.core_cache and counter > 0 and counter % page_size == 0 then
           local new_version, err = get_router_version()
           if err then
-            finish("load routes (failed to retrieve router version: ", err, ")")
+            finish("failed to retrieve router version: ", err)
             return nil, "failed to retrieve router version: " .. err
           end
 
           if new_version ~= version then
-            finish("load routes (router was changed while rebuilding it)")
+            finish("router was changed while rebuilding it")
             return nil, "router was changed while rebuilding it"
           end
         end
@@ -816,7 +816,7 @@ do
       if should_process_route(route) then
         local service, err = get_service_for_route(db, route, services_init_cache)
         if err then
-          finish("load routes (", err, ")")
+          finish(err)
           return nil, err
         end
 
@@ -836,11 +836,11 @@ do
       counter = counter + 1
     end
 
-    finish("load routes")
+    finish()
 
-    finish = kong.profiling.start()
+    finish = kong.profiling.start("build router")
     local new_router, err = Router.new(routes, router_cache, router_cache_neg)
-    finish("build router")
+    finish()
 
     if not new_router then
       return nil, "could not create router: " .. err
@@ -852,10 +852,10 @@ do
       router_version = version
     end
 
-    finish = kong.profiling.start()
+    finish = kong.profiling.start("flush router caches")
     router_cache:flush_all()
     router_cache_neg:flush_all()
-    finish("flush router caches")
+    finish()
 
     -- LEGACY - singletons module is deprecated
     singletons.router = router

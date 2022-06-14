@@ -220,33 +220,33 @@ end
 _M._update_compatible_payload = update_compatible_payload
 
 function _M:export_deflated_reconfigure_payload()
-  local finish = kong.profiling.start()
+  local finish = kong.profiling.start("export config")
   local config_table, err = declarative.export_config()
-  finish("export config")
+  finish()
   if not config_table then
     return nil, err
   end
 
   -- update plugins map
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("update plugins map")
   self.plugins_configured = {}
   if config_table.plugins then
     for _, plugin in pairs(config_table.plugins) do
       self.plugins_configured[plugin.name] = true
     end
   end
-  finish("update plugins map")
+  finish()
 
   -- store serialized plugins map for troubleshooting purposes
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("storing serialized plugins map")
   local shm_key_name = "clustering:cp_plugins_configured:worker_" .. ngx.worker.id()
   kong_dict:set(shm_key_name, cjson_encode(self.plugins_configured));
   ngx_log(ngx_DEBUG, "plugin configuration map key: " .. shm_key_name .. " configuration: ", kong_dict:get(shm_key_name))
-  finish("storing serialized plugins map")
+  finish()
 
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("calculate config hash")
   local config_hash, hashes = self:calculate_config_hash(config_table)
-  finish("calculate config hash")
+  finish()
 
   local payload = {
     type = "reconfigure",
@@ -258,9 +258,9 @@ function _M:export_deflated_reconfigure_payload()
 
   self.reconfigure_payload = payload
 
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("json encode config")
   payload, err = cjson_encode(payload)
-  finish("json encode config")
+  finish()
 
   if not payload then
     return nil, err
@@ -268,9 +268,9 @@ function _M:export_deflated_reconfigure_payload()
 
   yield()
 
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("deflate config")
   payload, err = deflate_gzip(payload)
-  finish("deflate config")
+  finish()
 
   if not payload then
     return nil, err
@@ -287,23 +287,23 @@ end
 
 
 function _M:push_config()
-  local finish = kong.profiling.start()
+  local finish = kong.profiling.start("export deflated reconfigure payload")
   local payload, err = self:export_deflated_reconfigure_payload()
-  finish("export deflated reconfigure payload")
+  finish()
 
   if not payload then
     ngx_log(ngx_ERR, _log_prefix, "unable to export config from database: ", err)
     return
   end
 
-  finish = kong.profiling.start()
+  finish = kong.profiling.start("release queue semaphores")
   local n = 0
   for _, queue in pairs(self.clients) do
     table_insert(queue, RECONFIGURE_TYPE)
     queue.post()
     n = n + 1
   end
-  finish("release queue semaphores")
+  finish()
 
   ngx_log(ngx_DEBUG, _log_prefix, "config pushed to ", n, " clients")
 end
@@ -771,14 +771,14 @@ function _M:handle_cp_websocket()
         else -- is reconfigure
           local previous_sync_status = sync_status
 
-          local finish = kong.profiling.start()
+          local finish = kong.profiling.start("check configuration compatibility")
           ok, err, sync_status = self:check_configuration_compatibility(dp_plugins_map)
-          finish("check configuration compatibility")
+          finish()
 
           if ok then
-            finish = kong.profiling.start()
+            finish = kong.profiling.start("update compatible payload")
             local has_update, deflated_payload, err = update_compatible_payload(self.reconfigure_payload, dp_version)
-            finish("update compatible payload")
+            finish()
 
             if not has_update then -- no modification, use the cached payload
               deflated_payload = self.deflated_reconfigure_payload
@@ -789,9 +789,9 @@ function _M:handle_cp_websocket()
             end
 
             -- config update
-            finish = kong.profiling.start()
+            finish = kong.profiling.start("send binary")
             local _, err = wb:send_binary(deflated_payload)
-            finish("send binary")
+            finish()
 
             if err then
               if not is_timeout(err) then
@@ -807,9 +807,9 @@ function _M:handle_cp_websocket()
           else
             ngx_log(ngx_WARN, _log_prefix, "unable to send updated configuration to data plane: ", err, log_suffix)
             if sync_status ~= previous_sync_status then
-              finish = kong.profiling.start()
+              finish = kong.profiling.start("update status")
               update_sync_status()
-              finish("update status")
+              finish()
             end
           end
         end
@@ -852,9 +852,9 @@ local function push_config_loop(premature, self, push_config_semaphore, delay)
     return
   end
 
-  local finish = kong.profiling.start()
+  local finish = kong.profiling.start("export deflated reconfigure payload")
   local _, err = self:export_deflated_reconfigure_payload()
-  finish("export deflated reconfigure payload")
+  finish()
   if err then
     ngx_log(ngx_ERR, _log_prefix, "unable to export initial config from database: ", err)
   end
@@ -865,9 +865,9 @@ local function push_config_loop(premature, self, push_config_semaphore, delay)
       return
     end
     if ok then
-      finish = kong.profiling.start()
+      finish = kong.profiling.start("push config")
       ok, err = pcall(self.push_config, self)
-      finish("push config")
+      finish()
       if ok then
         local sleep_left = delay
         while sleep_left > 0 do
