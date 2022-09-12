@@ -1420,21 +1420,21 @@ local function pwait_until(f, timeout, step)
 end
 
 --- Wait for some timers, throws an error on timeout.
--- 
+--
 -- NOTE: this is a regular Lua function, not a Luassert assertion.
 -- @function wait_timer
 -- @tparam string timer_name_pattern the call will apply to all timers matching this string
 -- @tparam boolean plain if truthy, the `timer_name_pattern` will be matched plain, so without pattern matching
 -- @tparam string mode one of: "all-finish", "all-running", "any-finish", "any-running", or "worker-wide-all-finish"
--- 
+--
 -- any-finish: At least one of the timers that were matched finished
--- 
+--
 -- all-finish: All timers that were matched finished
--- 
+--
 -- any-running: At least one of the timers that were matched is running
--- 
+--
 -- all-running: All timers that were matched are running
--- 
+--
 -- worker-wide-all-finish: All the timers in the worker that were matched finished
 -- @tparam[opt=2] number timeout maximum time to wait
 -- @tparam[opt] number admin_client_timeout, to override the default timeout setting
@@ -1582,7 +1582,7 @@ end
 
 
 --- Wait for all targets, upstreams, services, and routes update
--- 
+--
 -- NOTE: this function is not available for DBless-mode
 -- @function wait_for_all_config_update
 -- @tparam[opt=30] number timeout maximum time to wait
@@ -1831,12 +1831,16 @@ local function contains(state, args)
 end
 say:set("assertion.contains.negative", [[
 Expected array to contain element.
-Expected to contain:
+Expected to find:
+%s
+in array:
 %s
 ]])
 say:set("assertion.contains.positive", [[
 Expected array to not contain element.
 Expected to not contain:
+%s
+in array:
 %s
 ]])
 luassert:register("assertion", "contains", contains,
@@ -3175,7 +3179,7 @@ local function clustering_client_json(opts)
 end
 
 local clustering_client_wrpc
-do 
+do
   local wrpc = require("kong.tools.wrpc")
   local wrpc_proto = require("kong.tools.wrpc.proto")
   local semaphore = require("ngx.semaphore")
