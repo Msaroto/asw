@@ -31,10 +31,12 @@ for _, strategy in helpers.each_strategy() do
         config   = {
           host          = "localhost",
           port          = sam_port,
+          https         = false,
           aws_key       = "mock-key",
           aws_secret    = "mock-secret",
           aws_region    = "us-east-1",
           function_name = "HelloWorldFunction",
+          log_type      = "None",
         },
       }
     end)
@@ -74,9 +76,7 @@ for _, strategy in helpers.each_strategy() do
             host = "lambda.com"
           }
         })
-        assert.truthy(res)
-        assert.truthy(true)
-
+        assert.res_status(200, res)
       end)
     end)
   end)
