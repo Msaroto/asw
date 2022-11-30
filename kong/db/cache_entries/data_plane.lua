@@ -2,6 +2,7 @@ local _M = {}
 --local _MT = { __index = _M, }
 
 local constants = require "kong.constants"
+local utils = require "kong.tools.utils"
 local txn = require "resty.lmdb.transaction"
 
 local ipairs = ipairs
@@ -10,6 +11,8 @@ local max = math.max
 local min = math.min
 
 local exiting = ngx.worker.exiting
+local get_phase = ngx.get_phase
+local yield = utils.yield
 local unmarshall = require("kong.db.declarative.marshaller").unmarshall
 
 local is_http_subsystem = ngx.config.subsystem == "http"
@@ -39,8 +42,12 @@ local function load_into_cache(entries)
     t:db_drop(false)
   end
 
+  local phase = get_phase()
+
   local latest_revision = 0
   for _, entry in ipairs(entries) do
+    yield(true, phase)
+
     local key = entry.key
     local value = entry.value
     local event = entry.event
