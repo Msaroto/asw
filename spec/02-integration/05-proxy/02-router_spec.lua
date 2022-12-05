@@ -2275,6 +2275,8 @@ for _, strategy in helpers.each_strategy() do
         assert(helpers.start_kong({
           router_flavor = flavor,
           worker_consistency = consistency,
+          db_update_frequency = 1,
+          worker_state_update_frequency = 1,
           database = strategy,
           nginx_worker_processes = 4,
           plugins = "bundled,enable-buffering",
@@ -2325,9 +2327,7 @@ for _, strategy in helpers.each_strategy() do
         assert.res_status(201, res)
         admin_client:close()
 
-        local workers_before = helpers.get_kong_workers()
-        assert(helpers.signal_workers(nil, "-TERM"))
-        helpers.wait_until_no_common_workers(workers_before, 1) -- respawned
+        helpers.signal_workers("TERM")
 
         proxy_client:close()
         proxy_client = helpers.proxy_client()

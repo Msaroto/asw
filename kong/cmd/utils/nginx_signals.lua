@@ -61,8 +61,7 @@ local function send_signal(kong_conf, signal)
 
   log.verbose("sending %s signal to nginx running at %s", signal, kong_conf.nginx_pid)
 
-  local code = kill.kill(kong_conf.nginx_pid, "-s " .. signal)
-  if code ~= 0 then
+  if not kill.signal(kong_conf.nginx_pid, signal) then
     return nil, "could not send signal"
   end
 
