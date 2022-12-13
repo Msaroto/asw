@@ -10,12 +10,8 @@ local certificate  = require "kong.runloop.certificate"
 local concurrency  = require "kong.concurrency"
 local workspaces   = require "kong.workspaces"
 local lrucache     = require "resty.lrucache"
-<<<<<<< HEAD
 local marshall     = require "kong.cache.marshall"
-
-=======
 local ktls         = require("resty.kong.tls")
->>>>>>> aebd07c56 (feat(core) tls protocol upstream support upstream tls config)
 
 local PluginsIterator = require "kong.runloop.plugins_iterator"
 local instrumentation = require "kong.tracing.instrumentation"
