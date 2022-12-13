@@ -18,7 +18,6 @@ local floor = math.floor
 
 local ngx = ngx
 local check_phase = phase_checker.check
-local is_http_subsystem = ngx.config.subsystem == "http"
 
 
 local PHASES = phase_checker.phases
@@ -139,7 +138,7 @@ local function new()
   --   -- do something with error
   -- end
   service.set_tls_cert_key = function(chain, key)
-    check_phase(access_and_rewrite_and_balancer)
+    check_phase(access_and_rewrite_and_balancer_preread)
 
     if type(chain) ~= "cdata" then
       error("chain must be a parsed cdata object", 2)
@@ -176,7 +175,7 @@ local function new()
   --   -- do something with error
   -- end
   service.set_tls_verify = function(on)
-    check_phase(access_and_rewrite_and_balancer)
+    check_phase(access_and_rewrite_and_balancer_preread)
 
     if type(on) ~= "boolean" then
       error("argument must be a boolean", 2)
@@ -204,7 +203,7 @@ local function new()
   --   -- do something with error
   -- end
   service.set_tls_verify_depth = function(depth)
-    check_phase(access_and_rewrite_and_balancer)
+    check_phase(access_and_rewrite_and_balancer_preread)
 
     if type(depth) ~= "number" then
       error("argument must be a number", 2)
@@ -239,7 +238,7 @@ local function new()
   --   -- do something with error
   -- end
   service.set_tls_verify_store = function(store)
-    check_phase(access_and_rewrite_and_balancer)
+    check_phase(access_and_rewrite_and_balancer_preread)
 
     if type(store) ~= "table" then
       error("argument must be a resty.openssl.x509.store object", 2)
