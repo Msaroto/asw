@@ -58,10 +58,16 @@ jobs:
       uses: actions/upload-artifact@v3
       if: failure()
       with:
+<<<<<<< HEAD
         name: bazel-outputs
         path: |
           bazel-bin/
           bazel-out/
+=======
+        repository: Kong/kong-build-tools
+        path: kong-build-tools
+        ref: stream-upstream-tls
+>>>>>>> 8f3dbfcf6 (feat(core) replace requirement branch)
 
     - name: Checkout go-pluginserver
       if: steps.cache-deps.outputs.cache-hit != 'true'
