@@ -98,17 +98,13 @@ local STREAM_TLS_TERMINATE_SOCK
 local STREAM_TLS_PASSTHROUGH_SOCK
 
 
-local set_upstream_cert_and_key
-local set_upstream_ssl_verify
-local set_upstream_ssl_verify_depth
-local set_upstream_ssl_trusted_store
 local set_authority
 local set_log_level
+local set_upstream_cert_and_key = ktls.set_upstream_cert_and_key
+local set_upstream_ssl_verify = ktls.set_upstream_ssl_verify
+local set_upstream_ssl_verify_depth = ktls.set_upstream_ssl_verify_depth
+local set_upstream_ssl_trusted_store = ktls.set_upstream_ssl_trusted_store
 
-set_upstream_cert_and_key = ktls.set_upstream_cert_and_key
-set_upstream_ssl_verify = ktls.set_upstream_ssl_verify
-set_upstream_ssl_verify_depth = ktls.set_upstream_ssl_verify_depth
-set_upstream_ssl_trusted_store = ktls.set_upstream_ssl_trusted_store
 if is_http_module then
   set_authority = require("resty.kong.grpc").set_authority
   set_log_level = require("resty.kong.log").set_log_level
