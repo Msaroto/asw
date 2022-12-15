@@ -117,6 +117,9 @@ chain must be a parsed cdata object
 key must be a parsed cdata object
 --- no_error_log
 [error]
+
+
+
 === TEST 6: stream service.set_tls_cert_key() works with valid cert and key
 --- stream_config eval: $t::Util::HttpConfig
 --- stream_server_config
