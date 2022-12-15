@@ -193,7 +193,7 @@ local function new()
   -- directive or using the [kong.service.set_tls_verify](#kongserviceset_tls_verify) function.
   --
   -- @function kong.service.set_tls_verify_depth
-  -- @phases `rewrite`, `access`, `balancer`
+  -- @phases `rewrite`, `access`, `balancer`, `preread`
   -- @tparam number depth Depth to use when validating. Must be non-negative
   -- @treturn boolean|nil `true` if the operation succeeded, `nil` if an error occurred
   -- @treturn string|nil An error message describing the error if there was one
