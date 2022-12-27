@@ -33,6 +33,16 @@ cluster_ocsp = off
 cluster_max_payload = 4194304
 cluster_use_proxy = off
 
+admin_api_uri = NONE
+admin_gui_listen = 0.0.0.0:8002, 0.0.0.0:8445 ssl
+admin_gui_url =
+admin_gui_path = /
+admin_gui_access_log = logs/admin_gui_access.log
+admin_gui_error_log = logs/admin_gui_error.log
+admin_gui_flags = {}
+admin_gui_ssl_cert = NONE
+admin_gui_ssl_cert_key = NONE
+
 lmdb_environment_path = dbless.lmdb
 lmdb_map_size = 128m
 mem_cache_size = 128m

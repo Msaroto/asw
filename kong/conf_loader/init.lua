@@ -20,6 +20,7 @@ local log = require "kong.cmd.utils.log"
 local env = require "kong.cmd.utils.env"
 local ffi = require "ffi"
 
+local admin_gui_conf_loader = require "kong.admin_gui.conf_loader"
 
 local fmt = string.format
 local sub = string.sub
@@ -71,64 +72,64 @@ ffi.cdef([[
 
 -- Version 5: https://wiki.mozilla.org/Security/Server_Side_TLS
 local cipher_suites = {
-                   modern = {
-                protocols = "TLSv1.3",
+  modern = {
+    protocols = "TLSv1.3",
                   ciphers = nil,   -- all TLSv1.3 ciphers are considered safe
     prefer_server_ciphers = "off", -- as all are safe, let client choose
   },
-             intermediate = {
-                protocols = "TLSv1.2 TLSv1.3",
-                  ciphers = "ECDHE-ECDSA-AES128-GCM-SHA256:"
-                         .. "ECDHE-RSA-AES128-GCM-SHA256:"
-                         .. "ECDHE-ECDSA-AES256-GCM-SHA384:"
-                         .. "ECDHE-RSA-AES256-GCM-SHA384:"
-                         .. "ECDHE-ECDSA-CHACHA20-POLY1305:"
-                         .. "ECDHE-RSA-CHACHA20-POLY1305:"
-                         .. "DHE-RSA-AES128-GCM-SHA256:"
-                         .. "DHE-RSA-AES256-GCM-SHA384",
-                 dhparams = "ffdhe2048",
+  intermediate = {
+    protocols = "TLSv1.2 TLSv1.3",
+    ciphers = "ECDHE-ECDSA-AES128-GCM-SHA256:"
+        .. "ECDHE-RSA-AES128-GCM-SHA256:"
+        .. "ECDHE-ECDSA-AES256-GCM-SHA384:"
+        .. "ECDHE-RSA-AES256-GCM-SHA384:"
+        .. "ECDHE-ECDSA-CHACHA20-POLY1305:"
+        .. "ECDHE-RSA-CHACHA20-POLY1305:"
+        .. "DHE-RSA-AES128-GCM-SHA256:"
+        .. "DHE-RSA-AES256-GCM-SHA384",
+    dhparams = "ffdhe2048",
     prefer_server_ciphers = "off",
   },
-                      old = {
-                protocols = "TLSv1 TLSv1.1 TLSv1.2 TLSv1.3",
-                  ciphers = "ECDHE-ECDSA-AES128-GCM-SHA256:"
-                         .. "ECDHE-RSA-AES128-GCM-SHA256:"
-                         .. "ECDHE-ECDSA-AES256-GCM-SHA384:"
-                         .. "ECDHE-RSA-AES256-GCM-SHA384:"
-                         .. "ECDHE-ECDSA-CHACHA20-POLY1305:"
-                         .. "ECDHE-RSA-CHACHA20-POLY1305:"
-                         .. "DHE-RSA-AES128-GCM-SHA256:"
-                         .. "DHE-RSA-AES256-GCM-SHA384:"
-                         .. "DHE-RSA-CHACHA20-POLY1305:"
-                         .. "ECDHE-ECDSA-AES128-SHA256:"
-                         .. "ECDHE-RSA-AES128-SHA256:"
-                         .. "ECDHE-ECDSA-AES128-SHA:"
-                         .. "ECDHE-RSA-AES128-SHA:"
-                         .. "ECDHE-ECDSA-AES256-SHA384:"
-                         .. "ECDHE-RSA-AES256-SHA384:"
-                         .. "ECDHE-ECDSA-AES256-SHA:"
-                         .. "ECDHE-RSA-AES256-SHA:"
-                         .. "DHE-RSA-AES128-SHA256:"
-                         .. "DHE-RSA-AES256-SHA256:"
-                         .. "AES128-GCM-SHA256:"
-                         .. "AES256-GCM-SHA384:"
-                         .. "AES128-SHA256:"
-                         .. "AES256-SHA256:"
-                         .. "AES128-SHA:"
-                         .. "AES256-SHA:"
-                         .. "DES-CBC3-SHA",
+  old = {
+    protocols = "TLSv1 TLSv1.1 TLSv1.2 TLSv1.3",
+    ciphers = "ECDHE-ECDSA-AES128-GCM-SHA256:"
+        .. "ECDHE-RSA-AES128-GCM-SHA256:"
+        .. "ECDHE-ECDSA-AES256-GCM-SHA384:"
+        .. "ECDHE-RSA-AES256-GCM-SHA384:"
+        .. "ECDHE-ECDSA-CHACHA20-POLY1305:"
+        .. "ECDHE-RSA-CHACHA20-POLY1305:"
+        .. "DHE-RSA-AES128-GCM-SHA256:"
+        .. "DHE-RSA-AES256-GCM-SHA384:"
+        .. "DHE-RSA-CHACHA20-POLY1305:"
+        .. "ECDHE-ECDSA-AES128-SHA256:"
+        .. "ECDHE-RSA-AES128-SHA256:"
+        .. "ECDHE-ECDSA-AES128-SHA:"
+        .. "ECDHE-RSA-AES128-SHA:"
+        .. "ECDHE-ECDSA-AES256-SHA384:"
+        .. "ECDHE-RSA-AES256-SHA384:"
+        .. "ECDHE-ECDSA-AES256-SHA:"
+        .. "ECDHE-RSA-AES256-SHA:"
+        .. "DHE-RSA-AES128-SHA256:"
+        .. "DHE-RSA-AES256-SHA256:"
+        .. "AES128-GCM-SHA256:"
+        .. "AES256-GCM-SHA384:"
+        .. "AES128-SHA256:"
+        .. "AES256-SHA256:"
+        .. "AES128-SHA:"
+        .. "AES256-SHA:"
+        .. "DES-CBC3-SHA",
     prefer_server_ciphers = "on",
   },
-                     fips = { -- https://wiki.openssl.org/index.php/FIPS_mode_and_TLS
-                          -- TLSv1.0 and TLSv1.1 is not completely not FIPS compliant,
-                          -- but must be used under certain condititions like key sizes,
-                          -- signatures in the full chain that Kong can't control.
-                          -- In that case, we disables TLSv1.0 and TLSv1.1 and user
-                          -- can optionally turn them on if they are aware of the caveats.
-                          -- No FIPS compliant predefined DH group available prior to
-                          -- OpenSSL 3.0.
-                protocols = "TLSv1.2",
-                  ciphers = "TLSv1.2+FIPS:kRSA+FIPS:!eNULL:!aNULL",
+  fips = { -- https://wiki.openssl.org/index.php/FIPS_mode_and_TLS
+    -- TLSv1.0 and TLSv1.1 is not completely not FIPS compliant,
+    -- but must be used under certain condititions like key sizes,
+    -- signatures in the full chain that Kong can't control.
+    -- In that case, we disables TLSv1.0 and TLSv1.1 and user
+    -- can optionally turn them on if they are aware of the caveats.
+    -- No FIPS compliant predefined DH group available prior to
+    -- OpenSSL 3.0.
+    protocols = "TLSv1.2",
+    ciphers = "TLSv1.2+FIPS:kRSA+FIPS:!eNULL:!aNULL",
     prefer_server_ciphers = "on",
   }
 }
@@ -259,6 +260,7 @@ local PREFIX_PATHS = {
   status_ssl_cert_key_default_ecdsa = {"ssl", "status-kong-default-ecdsa.key"},
 }
 
+admin_gui_conf_loader.add(PREFIX_PATHS, admin_gui_conf_loader.ADMIN_GUI_PREFIX_PATHS)
 
 local function is_predefined_dhgroup(group)
   if type(group) ~= "string" then
@@ -341,12 +343,12 @@ local CONF_INFERENCES = {
     }
   },
   error_default_type = { enum = {
-                           "application/json",
-                           "application/xml",
-                           "text/html",
-                           "text/plain",
-                         }
-                       },
+    "application/json",
+    "application/xml",
+    "text/html",
+    "text/plain",
+  }
+  },
 
   database = { enum = { "postgres", "cassandra", "off" }  },
   pg_port = { typ = "number" },
@@ -378,41 +380,41 @@ local CONF_INFERENCES = {
   cassandra_ssl = { typ = "boolean" },
   cassandra_ssl_verify = { typ = "boolean" },
   cassandra_write_consistency = { enum = {
-                                  "ALL",
-                                  "EACH_QUORUM",
-                                  "QUORUM",
-                                  "LOCAL_QUORUM",
-                                  "ONE",
-                                  "TWO",
-                                  "THREE",
-                                  "LOCAL_ONE",
-                                }
-                              },
+    "ALL",
+    "EACH_QUORUM",
+    "QUORUM",
+    "LOCAL_QUORUM",
+    "ONE",
+    "TWO",
+    "THREE",
+    "LOCAL_ONE",
+  }
+  },
   cassandra_read_consistency = { enum = {
-                                  "ALL",
-                                  "EACH_QUORUM",
-                                  "QUORUM",
-                                  "LOCAL_QUORUM",
-                                  "ONE",
-                                  "TWO",
-                                  "THREE",
-                                  "LOCAL_ONE",
-                                }
-                              },
+    "ALL",
+    "EACH_QUORUM",
+    "QUORUM",
+    "LOCAL_QUORUM",
+    "ONE",
+    "TWO",
+    "THREE",
+    "LOCAL_ONE",
+  }
+  },
   cassandra_lb_policy = { enum = {
-                            "RoundRobin",
-                            "RequestRoundRobin",
-                            "DCAwareRoundRobin",
-                            "RequestDCAwareRoundRobin",
-                          }
-                        },
+    "RoundRobin",
+    "RequestRoundRobin",
+    "DCAwareRoundRobin",
+    "RequestDCAwareRoundRobin",
+  }
+  },
   cassandra_local_datacenter = { typ = "string" },
   cassandra_refresh_frequency = { typ = "number" },
   cassandra_repl_strategy = { enum = {
-                                "SimpleStrategy",
-                                "NetworkTopologyStrategy",
-                              }
-                            },
+    "SimpleStrategy",
+    "NetworkTopologyStrategy",
+  }
+  },
   cassandra_repl_factor = { typ = "number" },
   cassandra_data_centers = { typ = "array" },
   cassandra_schema_consensus_timeout = { typ = "number" },
@@ -430,7 +432,7 @@ local CONF_INFERENCES = {
     -- deprecating values for enums
     deprecated = {
       value = "strict",
-     }
+    }
   },
   router_consistency = {
     enum = { "strict", "eventual" },
@@ -438,7 +440,7 @@ local CONF_INFERENCES = {
       replacement = "worker_consistency",
       alias = function(conf)
         if conf.worker_consistency == nil and
-           conf.router_consistency ~= nil then
+            conf.router_consistency ~= nil then
           conf.worker_consistency = conf.router_consistency
         end
       end,
@@ -496,16 +498,16 @@ local CONF_INFERENCES = {
   status_access_log = { typ = "string" },
   status_error_log = { typ = "string" },
   log_level = { enum = {
-                  "debug",
-                  "info",
-                  "notice",
-                  "warn",
-                  "error",
-                  "crit",
-                  "alert",
-                  "emerg",
-                }
-              },
+    "debug",
+    "info",
+    "notice",
+    "warn",
+    "error",
+    "crit",
+    "alert",
+    "emerg",
+  }
+  },
   vaults = { typ = "array" },
   plugins = { typ = "array" },
   anonymous_reports = { typ = "boolean" },
@@ -552,6 +554,7 @@ local CONF_INFERENCES = {
   proxy_server_ssl_verify = { typ = "boolean" },
 }
 
+admin_gui_conf_loader.add(CONF_INFERENCES, admin_gui_conf_loader.ADMIN_GUI_CONF_INFERENCES)
 
 -- List of settings whose values must not be printed when
 -- using the CLI in debug mode (which prints all settings).
@@ -563,6 +566,7 @@ local CONF_SENSITIVE = {
   proxy_server = true, -- hide proxy server URL as it may contain credentials
 }
 
+admin_gui_conf_loader.add(CONF_SENSITIVE, admin_gui_conf_loader.ADMIN_GUI_CONF_SENSITIVE)
 
 local typ_checks = {
   array = function(v) return type(v) == "table" end,
@@ -647,11 +651,11 @@ local function check_and_infer(conf, opts)
     local typ = v_schema.typ or "string"
     if value and not typ_checks[typ](value) then
       errors[#errors + 1] = fmt("%s is not a %s: '%s'", k, typ,
-                                tostring(value))
+        tostring(value))
 
     elseif v_schema.enum and not tablex.find(v_schema.enum, value) then
       errors[#errors + 1] = fmt("%s has an invalid value: '%s' (%s)", k,
-                              tostring(value), concat(v_schema.enum, ", "))
+        tostring(value), concat(v_schema.enum, ", "))
 
     end
 
@@ -679,10 +683,10 @@ local function check_and_infer(conf, opts)
         local kong_port_num = tonumber(kong_port_str, 10)
 
         if  (host_port_num and host_port_num >= MIN_PORT and host_port_num <= MAX_PORT)
-        and (kong_port_num and kong_port_num >= MIN_PORT and kong_port_num <= MAX_PORT)
+            and (kong_port_num and kong_port_num >= MIN_PORT and kong_port_num <= MAX_PORT)
         then
-            conf.host_ports[kong_port_num] = host_port_num
-            conf.host_ports[kong_port_str] = host_port_num
+          conf.host_ports[kong_port_num] = host_port_num
+          conf.host_ports[kong_port_str] = host_port_num
         else
           errors[#errors + 1] = "invalid port mapping (`port_maps`): " .. port_map
         end
@@ -692,16 +696,16 @@ local function check_and_infer(conf, opts)
 
   if conf.database == "cassandra" then
     log.deprecation("Support for Cassandra is deprecated. Please refer to " ..
-                    "https://konghq.com/blog/cassandra-support-deprecated", {
+      "https://konghq.com/blog/cassandra-support-deprecated", {
       after   = "2.7",
       removal = "4.0"
     })
 
     if find(conf.cassandra_lb_policy, "DCAware", nil, true)
-       and not conf.cassandra_local_datacenter
+        and not conf.cassandra_local_datacenter
     then
       errors[#errors + 1] = "must specify 'cassandra_local_datacenter' when " ..
-                            conf.cassandra_lb_policy .. " policy is in use"
+          conf.cassandra_lb_policy .. " policy is in use"
     end
 
     if conf.cassandra_refresh_frequency < 0 then
@@ -712,12 +716,12 @@ local function check_and_infer(conf, opts)
       local endpoint, err = utils.normalize_ip(contact_point)
       if not endpoint then
         errors[#errors + 1] = fmt("bad cassandra contact point '%s': %s",
-                                  contact_point, err)
+          contact_point, err)
 
       elseif endpoint.port then
         errors[#errors + 1] = fmt("bad cassandra contact point '%s': %s",
-                                  contact_point,
-                                  "port must be specified in cassandra_port")
+          contact_point,
+          "port must be specified in cassandra_port")
       end
     end
 
@@ -726,7 +730,7 @@ local function check_and_infer(conf, opts)
     if conf.db_update_propagation == 0 then
       log.warn("You are using Cassandra but your 'db_update_propagation' " ..
                "setting is set to '0' (default). Due to the distributed "  ..
-               "nature of Cassandra, you should increase this value.")
+        "nature of Cassandra, you should increase this value.")
     end
   end
 
@@ -756,7 +760,7 @@ local function check_and_infer(conf, opts)
 
       elseif #ssl_cert ~= #ssl_cert_key then
         errors[#errors + 1] = prefix .. "ssl_cert was specified " .. #ssl_cert .. " times while " ..
-          prefix .. "ssl_cert_key was specified " .. #ssl_cert_key .. " times"
+            prefix .. "ssl_cert_key was specified " .. #ssl_cert_key .. " times"
       end
 
       if ssl_cert then
@@ -815,10 +819,12 @@ local function check_and_infer(conf, opts)
       local _, err = openssl_pkey.new(client_ssl_cert_key)
       if err then
         errors[#errors + 1] = "client_ssl_cert_key: failed loading key from " ..
-                               client_ssl_cert_key
+            client_ssl_cert_key
       end
     end
   end
+
+  admin_gui_conf_loader.validate(conf, errors)
 
   if conf.lua_ssl_trusted_certificate then
     local new_paths = {}
@@ -831,8 +837,8 @@ local function check_and_infer(conf, opts)
 
         elseif not ngx.IS_CLI then
           log.info("lua_ssl_trusted_certificate: unable to locate system bundle: " .. err ..
-                   ". If you are using TLS connections, consider specifying " ..
-                   "\"lua_ssl_trusted_certificate\" manually")
+            ". If you are using TLS connections, consider specifying " ..
+            "\"lua_ssl_trusted_certificate\" manually")
         end
       end
 
@@ -842,8 +848,8 @@ local function check_and_infer(conf, opts)
           local _, err = openssl_x509.new(trusted_cert)
           if err then
             errors[#errors + 1] = "lua_ssl_trusted_certificate: " ..
-                                  "failed loading certificate from " ..
-                                  trusted_cert
+                "failed loading certificate from " ..
+                trusted_cert
           end
         end
 
@@ -879,7 +885,7 @@ local function check_and_infer(conf, opts)
 
   if conf.ssl_dhparam then
     if not is_predefined_dhgroup(conf.ssl_dhparam)
-       and not exists(conf.ssl_dhparam) then
+        and not exists(conf.ssl_dhparam) then
       conf.ssl_dhparam = try_decode_base64(conf.ssl_dhparam)
       local _, err = openssl_pkey.new(
         {
@@ -889,7 +895,7 @@ local function check_and_infer(conf, opts)
       )
       if err then
         errors[#errors + 1] = "ssl_dhparam: failed loading certificate from "
-                              .. conf.ssl_dhparam
+            .. conf.ssl_dhparam
       end
     end
 
@@ -906,7 +912,7 @@ local function check_and_infer(conf, opts)
     for _, token in ipairs(conf.headers) do
       if token ~= "off" and not HEADER_KEY_TO_NAME[lower(token)] then
         errors[#errors + 1] = fmt("headers: invalid entry '%s'",
-                                  tostring(token))
+          tostring(token))
       end
     end
   end
@@ -918,7 +924,7 @@ local function check_and_infer(conf, opts)
       if not dns or dns.type == "name" then
         errors[#errors + 1] = "dns_resolver must be a comma separated list " ..
                               "in the form of IPv4/6 or IPv4/6:port, got '"  ..
-                              server .. "'"
+            server .. "'"
       end
     end
   end
@@ -931,12 +937,12 @@ local function check_and_infer(conf, opts)
 
   if conf.dns_order then
     local allowed = { LAST = true, A = true, AAAA = true,
-                      CNAME = true, SRV = true }
+      CNAME = true, SRV = true }
 
     for _, name in ipairs(conf.dns_order) do
       if not allowed[upper(name)] then
         errors[#errors + 1] = fmt("dns_order: invalid entry '%s'",
-                                  tostring(name))
+          tostring(name))
       end
     end
   end
@@ -950,7 +956,7 @@ local function check_and_infer(conf, opts)
     if not utils.is_valid_ip_or_cidr(address) and address ~= "unix:" then
       errors[#errors + 1] = "trusted_ips must be a comma separated list in " ..
                             "the form of IPv4 or IPv6 address or CIDR "      ..
-                            "block or 'unix:', got '" .. address .. "'"
+          "block or 'unix:', got '" .. address .. "'"
     end
   end
 
@@ -1101,7 +1107,7 @@ local function check_and_infer(conf, opts)
 
     if conf.database ~= "off" then
       errors[#errors + 1] = "only in-memory storage can be used when role = \"data_plane\"\n" ..
-                            "Hint: set database = off in your kong.conf"
+          "Hint: set database = off in your kong.conf"
     end
 
     if not conf.lua_ssl_trusted_certificate then
@@ -1162,7 +1168,7 @@ local function check_and_infer(conf, opts)
       local _, err = openssl_x509.new(cluster_ca_cert)
       if err then
         errors[#errors + 1] = "cluster_ca_cert: failed loading certificate from " ..
-                              cluster_ca_cert
+            cluster_ca_cert
       end
     end
   end
@@ -1193,7 +1199,7 @@ local function check_and_infer(conf, opts)
     end
 
     if #conf.opentelemetry_tracing > 1
-      and tablex.find(conf.opentelemetry_tracing, "off")
+        and tablex.find(conf.opentelemetry_tracing, "off")
     then
       errors[#errors + 1] = "invalid opentelemetry tracing types: off, other types are mutually exclusive"
     end
@@ -1316,10 +1322,10 @@ local function deprecated_properties(conf, opts)
         end
         if deprecated.replacement then
           log.warn("the '%s' configuration property is deprecated, use " ..
-                     "'%s' instead", property_name, deprecated.replacement)
+            "'%s' instead", property_name, deprecated.replacement)
         else
           log.warn("the '%s' configuration property is deprecated",
-                   property_name)
+            property_name)
         end
       end
 
@@ -1526,8 +1532,8 @@ local function load(path, custom_conf, opts)
 
   -- merge file conf, ENV variables, and arg conf (with precedence)
   local user_conf = tablex.pairmap(overrides, defaults,
-                                   tablex.union(opts, { no_defaults = true, }),
-                                   from_file_conf, custom_conf)
+    tablex.union(opts, { no_defaults = true, }),
+    from_file_conf, custom_conf)
 
   if not opts.starting then
     log.disable()
@@ -1539,8 +1545,8 @@ local function load(path, custom_conf, opts)
 
   -- merge user_conf with defaults
   local conf = tablex.pairmap(overrides, defaults,
-                              tablex.union(opts, { defaults_only = true, }),
-                              user_conf)
+    tablex.union(opts, { defaults_only = true, }),
+    user_conf)
 
   ---------------------------------
   -- Dereference process references
@@ -1759,10 +1765,10 @@ local function load(path, custom_conf, opts)
 
     for _, directive in pairs(http_directives) do
       if directive.name == "lua_shared_dict"
-         and find(directive.value, "prometheus_metrics", nil, true)
+          and find(directive.value, "prometheus_metrics", nil, true)
       then
-         found = true
-         break
+        found = true
+        break
       end
     end
 
@@ -1778,7 +1784,7 @@ local function load(path, custom_conf, opts)
 
     for _, directive in pairs(stream_directives) do
       if directive.name == "lua_shared_dict"
-        and find(directive.value, "stream_prometheus_metrics", nil, true)
+          and find(directive.value, "stream_prometheus_metrics", nil, true)
       then
         found = true
         break
@@ -1880,9 +1886,9 @@ local function load(path, custom_conf, opts)
   end
 
   local ssl_enabled = conf.proxy_ssl_enabled or
-                      conf.stream_proxy_ssl_enabled or
-                      conf.admin_ssl_enabled or
-                      conf.status_ssl_enabled
+      conf.stream_proxy_ssl_enabled or
+      conf.admin_ssl_enabled or
+      conf.status_ssl_enabled
 
   for _, name in ipairs({ "nginx_http_directives", "nginx_stream_directives" }) do
     for i, directive in ipairs(conf[name]) do
@@ -1904,8 +1910,13 @@ local function load(path, custom_conf, opts)
     end
   end
 
+  ok, err = admin_gui_conf_loader.load(conf)
+  if not ok then
+    return nil, err
+  end
+
   if conf.lua_ssl_trusted_certificate
-     and #conf.lua_ssl_trusted_certificate > 0 then
+      and #conf.lua_ssl_trusted_certificate > 0 then
 
     conf.lua_ssl_trusted_certificate = tablex.map(
       function(cert)
@@ -1918,7 +1929,7 @@ local function load(path, custom_conf, opts)
     )
 
     conf.lua_ssl_trusted_certificate_combined =
-      abspath(pl_path.join(conf.prefix, ".ca_combined"))
+    abspath(pl_path.join(conf.prefix, ".ca_combined"))
   end
 
   -- attach prefix files paths

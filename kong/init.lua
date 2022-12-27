@@ -71,6 +71,8 @@ _G.kong = kong_global.new() -- no versioned PDK for plugins for now
 local DB = require "kong.db"
 local dns = require "kong.tools.dns"
 local meta = require "kong.meta"
+local admin_gui = require "kong.admin_gui"
+local invoke_plugin = require "kong.invoke_plugin"
 local lapis = require "lapis"
 local runloop = require "kong.runloop.handler"
 local stream_api = require "kong.tools.stream_api"
@@ -611,6 +613,12 @@ function Kong.init()
   -- Load plugins as late as possible so that everything is set up
   assert(db.plugins:load_plugin_schemas(config.loaded_plugins))
 
+
+  kong.invoke_plugin = invoke_plugin.new {
+    loaded_plugins = db.plugins:get_handlers(),
+    kong_global = kong_global,
+  }
+
   if is_stream_module then
     stream_api.load_handlers()
   end
@@ -647,6 +655,8 @@ function Kong.init()
       end
     end
   end
+
+  admin_gui.init()
 
   db:close()
 
@@ -1552,6 +1562,18 @@ local function serve_content(module, options)
   options = options or {}
 
   header["Access-Control-Allow-Origin"] = options.allow_origin or "*"
+
+  -- this is mainly for backward compatibility
+  -- if the lua block specifies the acam or acah headers, use them.
+  -- those will be used in the auto-generated OPTIONS handlers
+  if ngx.req.get_method() == "OPTIONS" then
+    if options.acam then
+      header["Access-Control-Allow-Methods"] = options.acam
+    end
+    if options.acah then
+      header["Access-Control-Allow-Headers"] = options.acah
+    end
+  end
 
   lapis.serve(module)
 

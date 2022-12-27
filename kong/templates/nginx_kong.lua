@@ -334,6 +334,51 @@ server {
 }
 > end -- (role == "traditional" or role == "data_plane") and #proxy_listeners > 0
 
+> if (role == "control_plane" or role == "traditional") and #admin_listen > 0 and #admin_gui_listeners > 0 then
+server {
+    server_name kong_gui;
+> for i = 1, #admin_gui_listeners do
+    listen $(admin_gui_listeners[i].listener);
+> end
+
+> if admin_gui_ssl_enabled then
+> for i = 1, #admin_gui_ssl_cert do
+    ssl_certificate     $(admin_gui_ssl_cert[i]);
+    ssl_certificate_key $(admin_gui_ssl_cert_key[i]);
+> end
+    ssl_protocols TLSv1.1 TLSv1.2 TLSv1.3;
+> end
+
+    client_max_body_size 10m;
+    client_body_buffer_size 10m;
+
+    types {
+        text/html                             html htm shtml;
+        text/css                              css;
+        text/xml                              xml;
+        image/gif                             gif;
+        image/jpeg                            jpeg jpg;
+        application/javascript                js;
+        application/json                      json;
+        image/png                             png;
+        image/tiff                            tif tiff;
+        image/x-icon                          ico;
+        image/x-jng                           jng;
+        image/x-ms-bmp                        bmp;
+        image/svg+xml                         svg svgz;
+        image/webp                            webp;
+    }
+
+    access_log ${{ADMIN_GUI_ACCESS_LOG}};
+    error_log ${{ADMIN_GUI_ERROR_LOG}};
+
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript;
+
+    include nginx-kong-gui-include.conf;
+}
+> end
+
 > if (role == "control_plane" or role == "traditional") and #admin_listeners > 0 then
 server {
     server_name kong_admin;
@@ -360,7 +405,9 @@ server {
     location / {
         default_type application/json;
         content_by_lua_block {
-            Kong.admin_content()
+            Kong.admin_content({
+                acah = "Content-Type, Kong-Request-Type, Cache-Control",
+            })
         }
         header_filter_by_lua_block {
             Kong.admin_header_filter()

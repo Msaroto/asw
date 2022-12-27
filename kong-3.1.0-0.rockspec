@@ -65,6 +65,11 @@ build = {
     ["kong.globalpatches"] = "kong/globalpatches.lua",
     ["kong.error_handlers"] = "kong/error_handlers.lua",
     ["kong.hooks"] = "kong/hooks.lua",
+    ["kong.admin_gui"] = "kong/admin_gui/init.lua",
+    ["kong.admin_gui.api_helpers"] = "kong/admin_gui/api_helpers.lua",
+    ["kong.admin_gui.conf_loader"] = "kong/admin_gui/conf_loader.lua",
+    ["kong.admin_gui.feature_flags"] = "kong/admin_gui/feature_flags.lua",
+    ["kong.invoke_plugin"] = "kong/invoke_plugin.lua",
 
     ["kong.conf_loader"] = "kong/conf_loader/init.lua",
     ["kong.conf_loader.listeners"] = "kong/conf_loader/listeners.lua",
@@ -89,6 +94,7 @@ build = {
     ["kong.templates.nginx"] = "kong/templates/nginx.lua",
     ["kong.templates.nginx_kong"] = "kong/templates/nginx_kong.lua",
     ["kong.templates.nginx_kong_stream"] = "kong/templates/nginx_kong_stream.lua",
+    ["kong.templates.nginx_kong_gui_include"] = "kong/templates/nginx_kong_gui_include.lua",
     ["kong.templates.kong_defaults"] = "kong/templates/kong_defaults.lua",
     ["kong.templates.kong_yml"] = "kong/templates/kong_yml.lua",
 
