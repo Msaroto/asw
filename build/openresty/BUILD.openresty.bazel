@@ -101,15 +101,18 @@ CONFIGURE_OPTIONS = [
     "--with-cc-opt=\"-I$$EXT_BUILD_DEPS$$/pcre/include\"",
     "--with-cc-opt=\"-I$$EXT_BUILD_DEPS$$/openssl/include\"",
     "--with-cc-opt=\"-I$$EXT_BUILD_DEPS$$/luajit/include\"",
+    "--with-cc-opt=\"-I$$EXT_BUILD_DEPS$$/wasm_runtime/include\"",
     "--with-ld-opt=\"-L$$EXT_BUILD_DEPS$$/pcre/lib\"",
     "--with-ld-opt=\"-L$$EXT_BUILD_DEPS$$/openssl/lib\"",
     "--with-ld-opt=\"-L$$EXT_BUILD_DEPS$$/luajit/lib\"",
+    "--with-ld-opt=\"-L$$EXT_BUILD_DEPS$$/wasm_runtime/lib\"",
     # here let's try not having --disable-new-dtags; --disable-new-dtags creates runpath instead of rpath
     # note runpath can't handle indirect dependency (nginx -> luajit -> dlopen("other")), so each indirect
     # dependency should have its rpath set (luajit, libxslt etc); on the other side, rpath is not
     # overridable by LD_LIBRARY_PATH and it may cause trouble debugging, so we _should_ prefer runpath.
     # if it doesn't work, then add --disable-new-dtags back
     "--with-ld-opt=\"-Wl,-rpath,%s/kong/lib\"" % KONG_VAR["INSTALL_DESTDIR"],
+    "--with-ld-opt=\"-Wl,-rpath,$$EXT_BUILD_DEPS$$/wasm_runtime/lib\"",
     "-j%s" % KONG_VAR["NPROC"],
 
     # options from our customed patch
@@ -183,27 +186,6 @@ CONFIGURE_OPTIONS = [
         "--add-module=$$EXT_BUILD_ROOT$$/external/ngx_wasm_module",
     ],
     "//conditions:default": [],
-}) + select({
-    "@kong//:wasmx_v8": [
-        "--with-cc-opt=\"-I$$EXT_BUILD_ROOT$$/external/v8/include\"",
-        "--with-ld-opt=\"-L$$EXT_BUILD_ROOT$$/external/v8/lib\"",
-        "--with-ld-opt=\"-Wl,-rpath,$$EXT_BUILD_ROOT$$/external/v8/lib\"",
-    ],
-    "//conditions:default": [],
-}) + select({
-    "@kong//:wasmx_wasmer": [
-        "--with-cc-opt=\"-I$$EXT_BUILD_ROOT$$/external/wasmer/include\"",
-        "--with-ld-opt=\"-L$$EXT_BUILD_ROOT$$/external/wasmer/lib\"",
-        "--with-ld-opt=\"-Wl,-rpath,$$EXT_BUILD_ROOT$$/external/wasmer/lib\"",
-    ],
-    "//conditions:default": [],
-}) + select({
-    "@kong//:wasmx_wasmtime": [
-        "--with-cc-opt=\"-I$$EXT_BUILD_ROOT$$/external/wasmtime/include\"",
-        "--with-ld-opt=\"-L$$EXT_BUILD_ROOT$$/external/wasmtime/lib\"",
-        "--with-ld-opt=\"-Wl,-rpath,$$EXT_BUILD_ROOT$$/external/wasmtime/lib\"",
-    ],
-    "//conditions:default": [],
 })
 
 # TODO: set prefix to populate pid_path, conf_path, log_path etc
@@ -224,9 +206,6 @@ configure_make(
         "@lua-resty-events//:all_srcs",
         "@openresty_binding//:all_srcs",
         "@ngx_wasm_module//:all_srcs",
-        "@v8//:all_srcs",
-        "@wasmer//:all_srcs",
-        "@wasmtime//:all_srcs",
     ],
     env = select({
         "@kong//:wasmx_v8": {
@@ -258,6 +237,14 @@ configure_make(
         "@openresty//:luajit",
         "@openssl//:openssl",
     ] + select({
+        "@platforms//cpu:x86_64": [
+            "@kong//build/wasmx:lib-x86_64",
+        ],
+        "@platforms//cpu:arm64": [
+            "@kong//build/wasmx:lib-arm64",
+        ],
+        "//conditions:default": [],
+    }) + select({
         "@kong//:any-cross": [
             "@cross_deps_zlib//:zlib",
         ],

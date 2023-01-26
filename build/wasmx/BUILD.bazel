@@ -1,0 +1,23 @@
+load("@bazel_skylib//rules:copy_directory.bzl", "copy_directory")
+
+copy_directory(
+    name = "lib-x86_64",
+    src = select({
+        "@kong//:wasmx_v8": "$$EXT_BUILD_ROOT$$/external/v8",
+        "@kong//:wasmx_wasmer": "$$EXT_BUILD_ROOT$$/external/wasmer-x86_64",
+        "@kong//:wasmx_wasmtime": "$$EXT_BUILD_ROOT$$/external/wasmtime-x86_64",
+    }),
+    out = "$$EXT_BUILD_DEPS$$/wasm_runtime",
+    visibility = ["//visibility:public"],
+)
+
+copy_directory(
+    name = "lib-arm64",
+    src = select({
+        "@kong//:wasmx_v8": "$$EXT_BUILD_ROOT$$/external/v8",
+        "@kong//:wasmx_wasmer": "$$EXT_BUILD_ROOT$$/external/wasmer-arm64",
+        "@kong//:wasmx_wasmtime": "$$EXT_BUILD_ROOT$$/external/wasmtime-arm64",
+    }),
+    out = "$$EXT_BUILD_DEPS$$/wasm_runtime",
+    visibility = ["//visibility:public"],
+)
