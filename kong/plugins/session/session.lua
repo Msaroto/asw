@@ -6,6 +6,17 @@ local kong = kong
 local ipairs = ipairs
 
 
+-- In theory bodies are allowed in most HTTP methods, but in
+-- practice it is reasonable to limit reading bodies only to
+-- below list of HTTP methods.
+local READ_BODY_METHODS = {
+  DELETE = true, -- this is a stretch, but lets allow it
+  PATCH = true,
+  POST = true,
+  PUT = true,
+}
+
+
 local _M = {}
 
 
@@ -102,12 +113,14 @@ function _M.logout(conf)
     end
   end
 
-  local logout_post_arg = conf.logout_post_arg
-  if logout_post_arg then
-    local post_args = kong.request.get_body()
-    if post_args and post_args[logout_post_arg] then
-      kong.log.debug("logout by post argument")
-      return true
+  if conf.read_bodies then
+    local logout_post_arg = conf.logout_post_arg
+    if logout_post_arg and READ_BODY_METHODS[request_method] then
+      local post_args = kong.request.get_body()
+      if post_args and post_args[logout_post_arg] then
+        kong.log.debug("logout by post argument")
+        return true
+      end
     end
   end
 

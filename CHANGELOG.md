@@ -27,6 +27,11 @@
   `max_retry_delay` must now be `number`s greater than 0.001
   (seconds).
   [#10840](https://github.com/Kong/kong/pull/10840)
+- **Session**: a new configuration field `read_bodies` was added with a default value of `false`,
+  that changes behavior of `logout_post_arg` in a way that it is not anymore considered if the
+  `read_bodies` is not explicitly set to `true`. This is to avoid session plugin from reading
+  request bodies by default on e.g. `POST` request for logout detection.
+  [#10333](https://github.com/Kong/kong/pull/10333)
 
 ### Additions
 
@@ -37,6 +42,9 @@
 #### Status API
 
 #### Plugins
+
+- **Session**: A new configuration parameter `read_bodies` was added with default value of `false`.
+  [#10333](https://github.com/Kong/kong/pull/10333)
 
 #### PDK
 
