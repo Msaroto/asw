@@ -88,7 +88,7 @@ local function new(self)
   end
 
 
-  local function validate_value(value, err, vault, resource, key, reference)
+  local function validate_value(value, err, ttl, vault, resource, key, reference)
     if type(value) ~= "string" then
       if err then
         return nil, fmt("unable to load value (%s) from vault (%s): %s [%s]", resource, vault, err, reference)
@@ -103,7 +103,7 @@ local function new(self)
     end
 
     if not key then
-      return value
+      return value, nil, ttl
     end
 
     local json
@@ -129,7 +129,7 @@ local function new(self)
                       vault, resource, key, type(value), reference)
     end
 
-    return value
+    return value, nil, ttl
   end
 
 
@@ -140,31 +140,34 @@ local function new(self)
       cache_key = build_cache_key(name, resource, version)
     end
 
-    local value, err
+    local value, err, ttl
     if rotation then
       value = rotation[cache_key]
       if not value then
-        value, err = strategy.get(config, resource, version)
+        value, err, ttl = strategy.get(config, resource, version)
         if value then
           rotation[cache_key] = value
           if cache then
             -- Warmup cache just in case the value is needed elsewhere.
             -- TODO: do we need to clear cache first?
             cache:get(cache_key, nil, function()
-              return value, err
+              return value, err, ttl
             end)
           end
         end
       end
 
     elseif cache then
-      value, err = cache:get(cache_key, nil, strategy.get, config, resource, version)
+      value, err = cache:get(cache_key, nil, function()
+        value, err, ttl = strategy.get(config, resource, version)
+        return value, err, ttl
+      end)
 
     else
-      value, err = strategy.get(config, resource, version)
+      value, err, ttl = strategy.get(config, resource, version)
     end
 
-    return validate_value(value, err, name, resource, key, reference)
+    return validate_value(value, err, ttl, name, resource, key, reference)
   end
 
 
@@ -409,10 +412,11 @@ local function new(self)
       end
     end
 
+    local ttl
     if self and self.db and VAULT_NAMES[opts.name] == nil then
-      value, err = config_secret(reference, opts, rotation)
+      value, err, ttl = config_secret(reference, opts, rotation)
     else
-      value, err = process_secret(reference, opts, rotation)
+      value, err, ttl = process_secret(reference, opts, rotation)
     end
 
     if not value then
@@ -424,7 +428,11 @@ local function new(self)
       return nil, err
     end
 
-    LRU:set(reference, value)
+    if type(ttl) == "number" and ttl > 0 then
+      LRU:set(reference, value, ttl)
+    else
+      LRU:set(reference, value)
+    end
 
     return value
   end
