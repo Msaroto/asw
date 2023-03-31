@@ -1530,6 +1530,15 @@
 # TUNING & BEHAVIOR
 #------------------------------------------------------------------------------
 
+#privileged_agent = off          # Enables or disables privileged agent worker
+                                 # process. Privileged agent worker process
+                                 # increases memory usage a little bit while
+                                 # allowing to reduce latencies by moving some
+                                 # background tasks, such as CP/DP connection
+                                 # handling, to an additional worker process.
+                                 #
+                                 # Currently this has effect only on data planes.
+
 #worker_consistency = eventual
                                  # Defines whether this node should rebuild its
                                  # state synchronously or asynchronously (the
