@@ -6,7 +6,7 @@ local Connector = {
   defaults = {
     pagination = {
       page_size     = 1000,
-      max_page_size = 50000,
+      max_page_size = 200000,
     },
   },
 }

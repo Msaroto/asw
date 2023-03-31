@@ -335,11 +335,12 @@ local function new_router(version)
   local routes, i = {}, 0
 
   local err
+
   -- The router is initially created on init phase, where kong.core_cache is
   -- still not ready. For those cases, use a plain Lua table as a cache
   -- instead
   local services_init_cache = {}
-  if not kong.core_cache and db.strategy ~= "off" then
+  if not kong.core_cache or db.strategy == "off" then
     services_init_cache, err = build_services_init_cache(db)
     if err then
       services_init_cache = {}
