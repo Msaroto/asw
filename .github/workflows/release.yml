@@ -135,7 +135,7 @@ jobs:
         ./configure --prefix=/usr/local/git
         make -j$(nproc)
         make install
-    
+
     - name: Add Git to PATH
       if: matrix.label == 'centos-7' || matrix.label == 'rhel-7' || matrix.image == 'ubuntu:18.04'
       run: |
