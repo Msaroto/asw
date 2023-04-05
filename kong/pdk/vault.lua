@@ -475,6 +475,36 @@ local function new(self)
   end
 
 
+  local function update(options)
+    if type(options) ~= "table" then
+      return options
+    end
+
+    -- TODO: should we skip updating options, if it was done recently?
+
+    -- TODO: should we have flag for disabling/enabling recursion?
+    for k, v in pairs(options) do
+      if k ~= "$refs" and type(v) == "table" then
+        options[k] = update(v)
+      end
+    end
+
+    local refs = options["$refs"]
+    if type(refs) ~= "table" or isempty(refs) then
+      return options
+    end
+
+    for field_name, reference in pairs(refs) do
+      local value = get(reference, nil, true) -- TODO: ignoring errors?
+      if value ~= nil then
+        options[field_name] = value
+      end
+    end
+
+    return options
+  end
+
+
   local function try(callback, options)
     -- store current values early on to avoid race conditions
     local previous
@@ -708,6 +738,11 @@ local function new(self)
   -- local value, err = kong.vault.get("{vault://env/cert/key}")
   function _VAULT.get(reference)
     return get(reference)
+  end
+
+
+  function _VAULT.update(options)
+    return update(options)
   end
 
 
