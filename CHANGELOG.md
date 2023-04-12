@@ -175,7 +175,9 @@
 - **Request Transformer**: honor value of untrusted_lua configuration parameter
   [#10327](https://github.com/Kong/kong/pull/10327)
 - **OAuth2**: fix an issue that OAuth2 token was being cached to nil while access to the wrong service first.
-  [#10522](https://github.com/Kong/kong/pull/10522)  
+  [#10522](https://github.com/Kong/kong/pull/10522)
+- **Response Transformer**: fix an issue that plugin does not transform the response body while upstream returns a Content-Type with +json suffix at subtype.
+  [#10656](https://github.com/Kong/kong/pull/10656)
 
 #### PDK
 
