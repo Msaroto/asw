@@ -27,7 +27,6 @@ local sub = string.sub
 local byte = string.byte
 local gsub = string.gsub
 local type = type
-local next = next
 local sort = table.sort
 local pcall = pcall
 local lower = string.lower
@@ -38,8 +37,9 @@ local tostring = tostring
 local tonumber = tonumber
 local decode_args = ngx.decode_args
 local unescape_uri = ngx.unescape_uri
-local parse_url = require "socket.url".parse
-local parse_path = require "socket.url".parse_path
+local parse_url = require("socket.url").parse
+local parse_path = require("socket.url").parse_path
+local encode_base64url = require("ngx.base64").encode_base64url
 local decode_json = cjson.decode
 
 
@@ -82,9 +82,16 @@ local function new(self)
   end
 
 
-  local function build_cache_key(name, resource, version)
-    return version and fmt("reference:%s:%s:%s", name, resource, version)
-                    or fmt("reference:%s:%s", name, resource)
+  local function build_cache_key(name, resource, version, hash)
+    if version and hash then
+      return fmt("reference:%s:%s:%s:%s", name, resource, version, hash)
+    elseif version then
+      return fmt("reference:%s:%s:%s", name, resource, version)
+    elseif hash then
+      return fmt("reference:%s:%s:%s", name, resource, hash)
+    else
+      return fmt("reference:%s:%s", name, resource)
+    end
   end
 
 
@@ -156,11 +163,11 @@ local function new(self)
   end
 
 
-  local function retrieve_value(strategy, config, reference, resource, name,
+  local function retrieve_value(strategy, config, hash, reference, resource, name,
                                 version, key, cache, rotation, cache_only)
     local cache_key
     if cache or rotation then
-      cache_key = build_cache_key(name, resource, version)
+      cache_key = build_cache_key(name, resource, version, hash)
     end
 
     local value, err, ttl
@@ -180,7 +187,7 @@ local function new(self)
           rotation[cache_key] = value
           if cache then
             -- Warmup cache just in case the value is needed elsewhere.
-            -- TODO: do we need to clear cache first?
+            cache:invalidate_local(cache_key)
             cache:get(cache_key, config, function()
               return value, err, ttl
             end)
@@ -208,6 +215,35 @@ local function new(self)
   end
 
 
+  local function get_config(schema, base_config, config_overrides)
+    if not config_overrides or isempty(config_overrides) then
+      return base_config
+    end
+
+    local config
+    for k, f in schema:each_field() do
+      local v = config_overrides[k]
+      v = arguments.infer_value(v, f)
+      -- TODO: should we be more visible with validation errors?
+      if v ~= nil and schema:validate_field(f, v) then
+        if not config then
+          config = clone(base_config)
+          KEY_BUFFER:reset()
+        end
+        config[k] = v
+        KEY_BUFFER:putf("%s=%s;", k, v)
+      end
+    end
+
+    local hash
+    if config then
+      hash = encode_base64url(md5_bin(KEY_BUFFER:get()))
+    end
+
+    return config or base_config, hash
+  end
+
+
   local function process_secret(reference, opts, rotation, cache_only)
     local name = opts.name
     if not VAULT_NAMES[name] then
@@ -228,7 +264,7 @@ local function new(self)
           return nil, fmt("could not find vault schema (%s): %s [%s]", name, strategy, reference)
         end
 
-        schema = schema.fields.config
+        schema = require("kong.db.schema").new(schema.fields.config)
 
       else
         local ok
@@ -243,7 +279,9 @@ local function new(self)
           return nil, fmt("could not find vault schema (%s): %s [%s]", name, def, reference)
         end
 
-        schema = require("kong.db.schema").new(require("kong.db.schema.entities.vaults"))
+        local Schema = require("kong.db.schema")
+
+        schema = Schema.new(require("kong.db.schema.entities.vaults"))
 
         local err
         ok, err = schema:new_subschema(name, def)
@@ -260,39 +298,38 @@ local function new(self)
           strategy.init()
         end
 
-        schema = schema.fields.config
+        schema = Schema.new(schema.fields.config)
       end
 
       STRATEGIES[name] = strategy
       SCHEMAS[name] = schema
     end
 
-    local config = CONFIGS[name]
-    if not config then
-      config = opts.config or {}
+    -- base config stays the same so we can cache it
+    local base_config = CONFIGS[name]
+    if not base_config then
+      base_config = {}
       if self and self.configuration then
         local configuration = self.configuration
-        local fields = schema.fields
         local env_name = gsub(name, "-", "_")
-        for i = 1, #fields do
-          local k, f = next(fields[i])
-          if config[k] == nil then
-            local n = lower(fmt("vault_%s_%s", env_name, k))
-            local v = configuration[n]
-            if v ~= nil then
-              config[k] = v
-            elseif f.required and f.default ~= nil then
-              config[k] = f.default
-            end
+        for k, f in schema:each_field() do
+          local n = lower(fmt("vault_%s_%s", env_name, gsub(k, "-", "_")))
+          local v = configuration[n]
+          v = arguments.infer_value(v, f)
+          -- TODO: should we be more visible with validation errors?
+          if v ~= nil and schema:validate_field(f, v) then
+            base_config[k] = v
+          elseif f.required and f.default ~= nil then
+            base_config[k] = f.default
           end
         end
+        CONFIGS[name] = base_config
       end
-
-      config = arguments.infer_value(config, schema)
-      CONFIGS[name] = config
     end
 
-    return retrieve_value(strategy, config, reference, opts.resource, name,
+    local config, hash = get_config(schema, base_config, opts.config)
+
+    return retrieve_value(strategy, config, hash, reference, opts.resource, name,
                           opts.version, opts.key, self and self.core_cache,
                           rotation, cache_only)
   end
@@ -334,26 +371,15 @@ local function new(self)
         return nil, fmt("could not find vault sub-schema (%s) [%s]", name, reference)
       end
 
-      schema = schema.fields.config
+      schema = require("kong.db.schema").new(schema.fields.config)
 
       STRATEGIES[name] = strategy
       SCHEMAS[name] = schema
     end
 
-    local config = opts.config
-    if config then
-      config = arguments.infer_value(config, schema)
-      for k, v in pairs(vault.config) do
-        if v ~= nil and config[k] == nil then
-          config[k] = v
-        end
-      end
+    local config, hash = get_config(schema, vault.config, opts.config)
 
-    else
-      config = vault.config
-    end
-
-    return retrieve_value(strategy, config, reference, opts.resource, prefix,
+    return retrieve_value(strategy, config, hash, reference, opts.resource, prefix,
                           opts.version, opts.key, cache, rotation, cache_only)
   end
 
@@ -563,7 +589,7 @@ local function new(self)
       KEY_BUFFER:putf("%s=%s;", key, val)
     end
 
-    local key = md5_bin(KEY_BUFFER:tostring())
+    local key = md5_bin(KEY_BUFFER:get())
     local updated
 
     -- is there already values with RETRY_TTL seconds ttl?
