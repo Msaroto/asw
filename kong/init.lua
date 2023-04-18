@@ -684,6 +684,8 @@ function Kong.init_worker()
   kong.timer:set_debug(kong.configuration.log_level == "debug")
   kong.timer:start()
 
+  kong.vault.init_worker()
+
   -- init DB
 
   local ok, err = kong.db:init_worker()
