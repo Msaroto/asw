@@ -684,8 +684,6 @@ function Kong.init_worker()
   kong.timer:set_debug(kong.configuration.log_level == "debug")
   kong.timer:start()
 
-  kong.vault.init_worker()
-
   -- init DB
 
   local ok, err = kong.db:init_worker()
@@ -739,6 +737,8 @@ function Kong.init_worker()
   kong.core_cache = core_cache
 
   kong.db:set_events_handler(worker_events)
+
+  kong.vault.init_worker()
 
   if is_dbless(kong.configuration) then
     -- databases in LMDB need to be explicitly created, otherwise `get`

@@ -792,8 +792,36 @@ local function new(self)
   local _VAULT = {}
 
 
+  local function flush_config_cache(data)
+    local cache = self.core_cache
+    if cache then
+      local vaults = self.db.vaults
+      local old_entity = data.old_entity
+      local old_prefix
+      if old_entity then
+        old_prefix = old_entity.prefix
+        if old_prefix and old_prefix ~= ngx.null then
+          cache:invalidate(vaults:cache_key(old_prefix))
+        end
+      end
+
+      local entity = data.entity
+      if entity then
+        local prefix = entity.prefix
+        if prefix and prefix ~= ngx.null and prefix ~= old_prefix then
+          cache:invalidate(vaults:cache_key(prefix))
+        end
+      end
+    end
+  end
+
+
   local function init_worker()
     _VAULT.init_worker = nil
+
+    if self.configuration.database ~= "off" then
+      self.worker_events.register(flush_config_cache, "crud", "vaults")
+    end
 
     local _, err = self.timer:named_every("secret-rotation", ROTATION_INTERVAL, rotate_secrets_timer)
     if err then
