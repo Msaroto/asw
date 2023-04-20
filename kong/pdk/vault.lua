@@ -899,6 +899,42 @@ local function new(self)
   end
 
 
+  ---
+  -- Helper function for secret rotation based on TTLs. Currently experimental.
+  --
+  -- @function kong.vault.update
+  -- @tparam   table  options  options containing secrets and references (this function modifies the input options)
+  -- @treturn  table           options with updated secret values
+  --
+  -- @usage
+  -- local options = kong.vault.update({
+  --   cert = "-----BEGIN CERTIFICATE-----...",
+  --   key = "-----BEGIN RSA PRIVATE KEY-----...",
+  --   cert_alt = "-----BEGIN CERTIFICATE-----...",
+  --   key_alt = "-----BEGIN EC PRIVATE KEY-----...",
+  --   ["$refs"] = {
+  --     cert = "{vault://aws/cert}",
+  --     key = "{vault://aws/key}",
+  --     cert_alt = "{vault://aws/cert-alt}",
+  --     key_alt = "{vault://aws/key-alt}",
+  --   }
+  -- })
+  --
+  -- -- or
+  --
+  -- local options = {
+  --   cert = "-----BEGIN CERTIFICATE-----...",
+  --   key = "-----BEGIN RSA PRIVATE KEY-----...",
+  --   cert_alt = "-----BEGIN CERTIFICATE-----...",
+  --   key_alt = "-----BEGIN EC PRIVATE KEY-----...",
+  --   ["$refs"] = {
+  --     cert = "{vault://aws/cert}",
+  --     key = "{vault://aws/key}",
+  --     cert_alt = "{vault://aws/cert-alt}",
+  --     key_alt = "{vault://aws/key-alt}",
+  --   }
+  -- }
+  -- kong.vault.update(options)
   function _VAULT.update(options)
     return update(options)
   end
