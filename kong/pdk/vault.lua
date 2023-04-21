@@ -506,7 +506,9 @@ local function new(self)
 
     if not value then
       if stale_value then
-        self.log.warn(err, " (returning a stale value)")
+        if not cache_only then
+          self.log.warn(err, " (returning a stale value)")
+        end
         return stale_value
       end
 
