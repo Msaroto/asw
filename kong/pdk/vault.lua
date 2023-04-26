@@ -156,7 +156,7 @@ local function new(self)
       return config and config.ttl or 0
     end
 
-    if ttl < 0 then
+    if ttl <= 0 then
       return 0
     end
 
