@@ -70,6 +70,7 @@ local function new(self)
   local STRATEGIES = {}
   local SCHEMAS = {}
   local CONFIGS = {}
+  local CONFIG_HASHES = {}
 
 
   local BRACE_START = byte("{")
@@ -237,9 +238,39 @@ local function new(self)
   end
 
 
-  local function get_config(schema, base_config, config_overrides)
+  local function get_prefix_hash(schema, prefix, base_config)
+    local hash = CONFIG_HASHES[prefix]
+    if hash then
+      return hash
+    end
+
+    for k in schema:each_field() do
+      local v = base_config[k]
+      if v ~= nil then
+        if not hash then
+          hash = true
+          KEY_BUFFER:reset()
+        end
+        KEY_BUFFER:putf("%s=%s;", k, v)
+      end
+    end
+
+    if hash then
+      hash = encode_base64url(md5_bin(KEY_BUFFER:get()))
+      CONFIG_HASHES[prefix] = hash
+    end
+
+    return hash
+  end
+
+
+  local function get_config(schema, base_config, config_overrides, prefix)
     if not config_overrides or isempty(config_overrides) then
-      return base_config
+      if not prefix then
+        return base_config
+      end
+
+      return base_config, get_prefix_hash(schema, prefix, base_config)
     end
 
     local config
@@ -251,6 +282,12 @@ local function new(self)
         if not config then
           config = clone(base_config)
           KEY_BUFFER:reset()
+          if prefix then
+            local hash = get_prefix_hash(schema, prefix, config)
+            if hash then
+              KEY_BUFFER:putf("%s;", hash)
+            end
+          end
         end
         config[k] = v
         KEY_BUFFER:putf("%s=%s;", k, v)
@@ -399,7 +436,7 @@ local function new(self)
       SCHEMAS[name] = schema
     end
 
-    local config, hash = get_config(schema, vault.config, opts.config)
+    local config, hash = get_config(schema, vault.config, opts.config, prefix)
 
     return retrieve_value(strategy, config, hash, reference, opts.resource, prefix,
                           opts.version, opts.key, cache, rotation, cache_only)
@@ -803,6 +840,7 @@ local function new(self)
       if old_entity then
         old_prefix = old_entity.prefix
         if old_prefix and old_prefix ~= ngx.null then
+          CONFIG_HASHES[old_prefix] = nil
           cache:invalidate(vaults:cache_key(old_prefix))
         end
       end
@@ -811,10 +849,13 @@ local function new(self)
       if entity then
         local prefix = entity.prefix
         if prefix and prefix ~= ngx.null and prefix ~= old_prefix then
+          CONFIG_HASHES[prefix] = nil
           cache:invalidate(vaults:cache_key(prefix))
         end
       end
     end
+
+    LRU:flush_all()
   end
 
 
@@ -831,6 +872,10 @@ local function new(self)
     end
   end
 
+  function _VAULT.flush()
+    CONFIG_HASHES = {}
+    LRU:flush_all()
+  end
 
   ---
   -- Checks if the passed in reference looks like a reference.
