@@ -4,6 +4,12 @@ local kill = require("resty.signal").kill
 local tonumber = tonumber
 local type = type
 
+local E_EMPTY_PID_FILE = "PID file is empty"
+local E_INVALID_PID_FILE = "PID file does not contain a valid PID"
+local E_NO_SUCH_PID_FILE = "PID file does not exist"
+local E_INVALID_PID_TYPE = "invalid PID type"
+local E_PID_OUT_OF_RANGE = "PID must be >= 2"
+
 
 ---
 -- Read and return the process ID from a pid file.
@@ -14,6 +20,11 @@ local type = type
 local function pid_from_file(fname)
   local data, err = read_file(fname)
   if not data then
+    -- map penlight error to our own
+    if err:lower():find("no such file", nil, true) then
+      err = E_NO_SUCH_PID_FILE
+    end
+
     return nil, err
   end
 
@@ -21,12 +32,12 @@ local function pid_from_file(fname)
   data = data:gsub("^%s*(.-)%s*$", "%1")
 
   if #data == 0 then
-    return nil, "pid file is empty"
+    return nil, E_EMPTY_PID_FILE
   end
 
   local pid = tonumber(data)
   if not pid then
-    return nil, "file does not contain a pid: " .. data
+    return nil, E_INVALID_PID_FILE
   end
 
   return pid
@@ -39,7 +50,7 @@ end
 ---@param  target      string|number
 ---@return integer|nil pid
 ---@return nil|string  error
-local function guess_pid(target)
+local function get_pid(target)
   local typ = type(target)
 
   local pid, err
@@ -54,20 +65,20 @@ local function guess_pid(target)
     -- the input as a numeric string
     pid, err = pid_from_file(target)
 
-    -- PID was supplied as a string (i.e. "123")
-    if not pid then
+    -- PID was supplied as a numeric string (i.e. "123")
+    if err == E_NO_SUCH_PID_FILE and tonumber(target) then
       pid = tonumber(target)
     end
 
   else
-    error("invalid PID target type: " .. typ, 2)
+    return nil, E_INVALID_PID_TYPE
   end
 
   if not pid then
     return nil, err
 
   elseif pid < 1 then
-    error("pid must be >= 1", 2)
+    return nil, E_PID_OUT_OF_RANGE
   end
 
   return pid
@@ -93,7 +104,7 @@ end
 ---@return boolean|nil ok
 ---@return nil|string  error
 local function signal(target, sig)
-  local pid, err = guess_pid(target)
+  local pid, err = get_pid(target)
 
   if not pid then
     return nil, err
@@ -108,14 +119,29 @@ end
 --
 -- Under the hood this sends the special `0` signal to check the process state.
 --
--- Returns true|false under normal circumstances or nil and an error string if
--- an error occurs.
+-- Returns:
+--   * true|false under normal circumstances
+--   * nil+error for invalid input
+--
+-- Throws for unexpected errors from resty.signal.
+--
+-- Callers should decide for themselves how strict they must be when handling
+-- errors. For instance, when NGINX is starting up there is a period where the
+-- pidfile may be empty or non-existent, which will result in this function
+-- returning nil+error. For some callers this might be expected and acceptible,
+-- but for others it may not.
 --
 ---@param  target      kong.cmd.utils.process.target
 ---@return boolean|nil exists
 ---@return nil|string  error
 local function exists(target)
-  local ok, err = signal(target, "NONE")
+  local pid, err = get_pid(target)
+  if not pid then
+    return nil, err
+  end
+
+  local ok
+  ok, err = kill(pid, 0)
 
   if ok then
     return true
@@ -124,7 +150,7 @@ local function exists(target)
     return false
   end
 
-  return ok, err
+  error(err or "unexpected error from resty.signal.kill()")
 end
 
 
@@ -132,5 +158,11 @@ return {
   exists = exists,
   pid_from_file = pid_from_file,
   signal = signal,
-  guess_pid = guess_pid,
+  pid = get_pid,
+
+  E_EMPTY_PID_FILE = E_EMPTY_PID_FILE,
+  E_NO_SUCH_PID_FILE = E_NO_SUCH_PID_FILE,
+  E_INVALID_PID_FILE = E_INVALID_PID_FILE,
+  E_INVALID_PID_TYPE = E_INVALID_PID_TYPE,
+  E_PID_OUT_OF_RANGE = E_PID_OUT_OF_RANGE,
 }

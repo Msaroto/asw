@@ -3178,7 +3178,7 @@ end
 -- @param pid_path Filename of the pid file.
 -- @param timeout (optional) in seconds, defaults to 10.
 local function wait_pid(pid_path, timeout, is_retry)
-  local pid, err = process.guess_pid(pid_path)
+  local pid, err = process.pid(pid_path)
 
   timeout = timeout or 10
 
@@ -3210,7 +3210,7 @@ end
 
 
 local function terminate(target, timeout, stop_sig)
-  local pid, err = process.guess_pid(target)
+  local pid, err = process.pid(target)
 
   if not pid then
     ngx.log(ngx.WARN, "couldn't determine PID from ", target, ": ", err)
