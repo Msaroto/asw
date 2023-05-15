@@ -1,7 +1,7 @@
 local helpers   = require "spec.helpers"
 local constants = require "kong.constants"
 local cjson     = require "cjson"
-local kill = require "kong.cmd.utils.kill"
+local process   = require "kong.cmd.utils.process"
 
 for _, strategy in helpers.each_strategy() do
 
@@ -651,7 +651,7 @@ describe("kong start/stop #" .. strategy, function()
       assert.False(ok)
       assert.matches("Kong is already running in " .. helpers.test_conf.prefix, stderr, nil, true)
 
-      assert(kill.exists(helpers.test_conf.nginx_pid))
+      assert(process.exists(helpers.test_conf.nginx_pid))
     end)
 
     it("does not prepare the prefix directory if Kong is already running", function()
@@ -797,7 +797,7 @@ describe("kong start/stop #" .. strategy, function()
       if type(pid) == "table" then
         -- signal everything once up front
         for _, p in ipairs(pid) do
-          kill.signal(p, "KILL")
+          process.signal(p, "KILL")
         end
 
         for _, p in ipairs(pid) do
@@ -808,8 +808,8 @@ describe("kong start/stop #" .. strategy, function()
       end
 
       helpers.wait_until(function()
-        kill.signal(pid, "KILL")
-        return kill.exists(pid) == false
+        process.signal(pid, "KILL")
+        return process.exists(pid) == false
       end)
     end
 

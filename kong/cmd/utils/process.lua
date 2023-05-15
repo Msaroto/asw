@@ -78,7 +78,7 @@ end
 -- Target processes may be referenced by their integer id (PID)
 -- or by a pid filename.
 --
----@alias kong.cmd.utils.kill.target
+---@alias kong.cmd.utils.process.target
 ---| integer # pid
 ---| string  # pid file
 
@@ -88,7 +88,7 @@ end
 --
 -- The signal may be specified as a name ("TERM") or integer (15).
 --
----@param  target      kong.cmd.utils.kill.target
+---@param  target      kong.cmd.utils.process.target
 ---@param  sig         resty.signal.name|integer
 ---@return boolean|nil ok
 ---@return nil|string  error
@@ -111,10 +111,10 @@ end
 -- Returns true|false under normal circumstances or nil and an error string if
 -- an error occurs.
 --
----@param  target      kong.cmd.utils.kill.target
+---@param  target      kong.cmd.utils.process.target
 ---@return boolean|nil exists
 ---@return nil|string  error
-local function is_running(target)
+local function exists(target)
   local ok, err = signal(target, "NONE")
 
   if ok then
@@ -129,7 +129,7 @@ end
 
 
 return {
-  is_running = is_running,
+  exists = exists,
   pid_from_file = pid_from_file,
   signal = signal,
   guess_pid = guess_pid,

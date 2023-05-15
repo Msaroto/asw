@@ -60,7 +60,7 @@ local Schema = require "kong.db.schema"
 local Entity = require "kong.db.schema.entity"
 local cjson = require "cjson.safe"
 local utils = require "kong.tools.utils"
-local kill = require "kong.cmd.utils.kill"
+local process = require "kong.cmd.utils.process"
 local http = require "resty.http"
 local pkey = require "resty.openssl.pkey"
 local nginx_signals = require "kong.cmd.utils.nginx_signals"
@@ -3156,7 +3156,7 @@ local function pid_dead(pid, timeout)
   local deadline = ngx.now() + (timeout or 10)
 
   repeat
-    local exists, err = kill.is_running(pid)
+    local exists, err = process.exists(pid)
 
     if exists == false then
       return true
@@ -3170,7 +3170,7 @@ local function pid_dead(pid, timeout)
     ngx.sleep(0.05)
   until ngx.now() >= deadline
 
-  return kill.is_running(pid) == false
+  return process.exists(pid) == false
 end
 
 
@@ -3178,7 +3178,7 @@ end
 -- @param pid_path Filename of the pid file.
 -- @param timeout (optional) in seconds, defaults to 10.
 local function wait_pid(pid_path, timeout, is_retry)
-  local pid, err = kill.guess_pid(pid_path)
+  local pid, err = process.guess_pid(pid_path)
 
   timeout = timeout or 10
 
@@ -3199,8 +3199,8 @@ local function wait_pid(pid_path, timeout, is_retry)
                     " seconds, using a bigger hammer...")
 
   local killed
-  killed, err = kill.signal(pid, "KILL")
-  if not killed and kill.is_running(pid) then
+  killed, err = process.signal(pid, "KILL")
+  if not killed and process.exists(pid) then
     ngx.log(ngx.WARN, "failed sending SIGKILL to nginx PID ", pid, ": ", err)
   end
 
@@ -3210,7 +3210,7 @@ end
 
 
 local function terminate(target, timeout, stop_sig)
-  local pid, err = kill.guess_pid(target)
+  local pid, err = process.guess_pid(target)
 
   if not pid then
     ngx.log(ngx.WARN, "couldn't determine PID from ", target, ": ", err)
@@ -3224,9 +3224,9 @@ local function terminate(target, timeout, stop_sig)
   stop_sig = stop_sig or "TERM"
 
   local ok
-  ok, err = kill.signal(pid, stop_sig)
+  ok, err = process.signal(pid, stop_sig)
 
-  if kill.is_running(pid) == false then
+  if process.exists(pid) == false then
     return true
 
   elseif not ok then
@@ -3431,8 +3431,8 @@ local function await_nginx_running(prefix, timeout)
   local pid
 
   wait_until(function()
-    pid = pid or kill.pid_from_file(pid_file)
-    return kill.is_running(pid or pid_file)
+    pid = pid or process.pid_from_file(pid_file)
+    return process.exists(pid or pid_file)
   end, timeout, 0.1)
 
   ngx.update_time()
@@ -3937,7 +3937,7 @@ end
     local running_conf = get_running_conf(prefix)
     if not running_conf then return end
 
-    if kill.pid_from_file(running_conf.nginx_pid) then
+    if process.pid_from_file(running_conf.nginx_pid) then
       -- kill kong_tests.conf service
       terminate(running_conf.nginx_pid, timeout)
     end
@@ -3963,19 +3963,19 @@ end
       pid_path = running_conf.nginx_pid
     end
 
-    return kill.signal(pid_path, signal)
+    return process.signal(pid_path, signal)
   end,
 
   -- send signal to all Nginx workers, not including the master
   signal_workers = function(signal)
     local workers = get_kong_workers()
     for _, pid in ipairs(workers) do
-      kill.signal(pid, signal)
+      process.signal(pid, signal)
     end
 
     wait_until(function()
       for _, pid in ipairs(workers) do
-        if kill.is_running(pid) then
+        if process.exists(pid) then
           return false
         end
       end
