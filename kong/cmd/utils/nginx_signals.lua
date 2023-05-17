@@ -55,13 +55,15 @@ end
 
 
 local function send_signal(kong_conf, signal)
-  if not process.exists(kong_conf.nginx_pid) then
+  local pid = process.pid(kong_conf.nginx_pid)
+
+  if not pid or not process.exists(pid) then
     return nil, fmt("nginx not running in prefix: %s", kong_conf.prefix)
   end
 
   log.verbose("sending %s signal to nginx running at %s", signal, kong_conf.nginx_pid)
 
-  if not process.signal(kong_conf.nginx_pid, signal) then
+  if not process.signal(pid, signal) then
     return nil, "could not send signal"
   end
 
@@ -214,26 +216,7 @@ end
 
 
 function _M.reload(kong_conf)
-  if not process.exists(kong_conf.nginx_pid) then
-    return nil, fmt("nginx not running in prefix: %s", kong_conf.prefix)
-  end
-
-  local nginx_bin, err = _M.find_nginx_bin(kong_conf)
-  if not nginx_bin then
-    return nil, err
-  end
-
-  local cmd = fmt("%s -p %s -c %s -s %s",
-                  nginx_bin, kong_conf.prefix, "nginx.conf", "reload")
-
-  log.debug("reloading nginx: %s", cmd)
-
-  local ok, _, _, stderr = pl_utils.executeex(cmd)
-  if not ok then
-    return nil, stderr
-  end
-
-  return true
+  return send_signal(kong_conf, "HUP")
 end
 
 

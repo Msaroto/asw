@@ -1,5 +1,4 @@
 local log = require "kong.cmd.utils.log"
-local stop = require "kong.cmd.stop"
 local process = require "kong.cmd.utils.process"
 local start = require "kong.cmd.start"
 local pl_path = require "pl.path"
@@ -18,17 +17,21 @@ local function execute(args)
     args.prefix = conf.prefix
   end
 
-  pcall(stop.execute, args, { quiet = true })
+  local pid = process.pid(conf.nginx_pid)
+  if pid and process.exists(pid) then
+    process.signal(pid, "TERM")
+
+    -- ensure Nginx stopped
+    local texp = ngx.time() + 5 -- 5s
+    while process.exists(pid) and ngx.time() < texp do
+      ngx.sleep(0.1)
+    end
+
+    assert(not process.exists(pid),
+           "kong is still running after 5s")
+  end
 
   log.enable()
-
-  -- ensure Nginx stopped
-  local texp = ngx.time() + 5 -- 5s
-  local running
-  repeat
-    ngx.sleep(0.1)
-    running = process.exists(conf.nginx_pid)
-  until not running or ngx.time() >= texp
 
   start.execute(args)
 end

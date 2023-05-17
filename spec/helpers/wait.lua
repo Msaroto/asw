@@ -140,7 +140,6 @@ local wait_ctx = {
   tries               = 0,
 }
 
-
 local wait_ctx_mt = { __index = wait_ctx }
 
 function wait_ctx:dd(msg)
@@ -170,6 +169,16 @@ function wait_ctx:wait()
   while true do
     ok, res, err = pcall(f)
 
+    if ok then
+      self.last_returned_value = first_non_nil(res, self.last_returned_value)
+      self.last_returned_error = first_non_nil(err, self.last_returned_error)
+      self.last_error = first_non_nil(err, self.last_error)
+    else
+      self.error_raised = true
+      self.last_raised_error = first_non_nil(res, self.last_raised_error)
+      self.last_error = first_non_nil(res, self.last_error)
+    end
+
     self.tries = self.tries + 1
     tries_remain = tries_remain - 1
 
@@ -177,37 +186,22 @@ function wait_ctx:wait()
 
     self:dd(self)
 
+    ngx.update_time()
+
     -- yay!
     if self.condition_met then
-      self.last_returned_value = res
       self.result = SUCCESS
       break
 
-      -- non-truthy return value
-    elseif ok and not res then
-      self.last_returned_error = first_non_nil(err, self.last_returned_error)
-      self.last_error = self.last_returned_error
+    elseif self.error_raised and not self.ignore_exceptions then
+      self.result = ERROR
+      break
 
-      -- error()
-    else
-      self.error_raised = true
-      self.last_raised_error = first_non_nil(res, "UNKNOWN")
-      self.last_error = self.last_raised_error
-
-      if not self.ignore_exceptions then
-        self.result = ERROR
-        break
-      end
-    end
-
-    if tries_remain == 0 then
+    elseif tries_remain == 0 then
       self.result = MAX_TRIES
       break
-    end
 
-    ngx.update_time()
-
-    if ngx.now() >= texp then
+    elseif ngx.now() >= texp then
       self.result = TIMEOUT
       break
     end
@@ -220,9 +214,12 @@ function wait_ctx:wait()
 
   self:dd(self)
 
-  -- re-raise
-  if self.error_raised and not self.ignore_exceptions then
-    error(self.last_raised_error, 2)
+  if self.error_raised
+     and not self.ignore_exceptions
+     and not self.condition_met
+  then
+    -- re-raise
+    error(self.last_raised_error)
   end
 end
 
@@ -400,6 +397,9 @@ luassert:register("modifier", "with_max_tries",
 luassert:register("modifier", "ignore_exceptions",
                   wait_until_modifier("ignore_exceptions"))
 
+luassert:register("modifier", "with_debug",
+                  wait_until_modifier("debug"))
+
 
 ---@param ctx spec.helpers.wait.ctx
 local function ctx_builder(ctx)
@@ -419,6 +419,7 @@ local function ctx_builder(ctx)
   self.with_timeout = with("timeout")
   self.with_step = with("step")
   self.with_max_tries = with("max_tries")
+  self.with_debug = with("debug")
 
   self.ignore_exceptions = function(ignore)
     ctx.ignore_exceptions = ctx:validate("ignore_exceptions", ignore,

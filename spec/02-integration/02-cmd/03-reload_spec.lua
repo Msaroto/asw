@@ -4,23 +4,61 @@ local cjson = require "cjson"
 
 local wait_for_file_contents = helpers.wait_for_file_contents
 
-local function connect(port)
-  local sock = assert(ngx.socket.tcp())
-  local ok, err = sock:connect("0.0.0.0", port)
-  if ok then
-    sock:close()
+local function try_connect(port)
+  local sock, err = ngx.socket.tcp()
+  if not sock then
+    return nil, err or "unknown error"
   end
 
-  return ok, err
+  sock:settimeouts(100, 100, 100)
+
+  local ok
+  ok, err = sock:connect("127.0.0.1", port)
+
+  sock:close()
+
+  if ok then
+    return true
+  end
+
+  return false, err or "unknown error"
 end
 
-local function assert_connect(port)
-  assert.truthy(connect(port))
+local function assert_connect(port, when, timeout)
+  timeout = timeout or 5
+
+  local msg = "failed to connect to port " .. port .. " " .. when
+
+  assert
+    .with_timeout(timeout)
+    .eventually(function()
+      return try_connect(port)
+    end)
+    .is_truthy(msg)
 end
 
-local function assert_not_connect(port)
-  assert.falsy(connect(port))
+local function assert_not_connect(port, when, timeout)
+  timeout = timeout or 5
+
+  local msg = "expected connection to port " .. port ..  " to fail "
+              .. "with 'connection refused' " .. when
+
+  assert
+    .with_timeout(timeout)
+    .eventually(function()
+      local ok, err = try_connect(port)
+      if ok then
+        return false, "connection succeeded"
+
+      elseif err ~= "connection refused" then
+        return false, "unexpected error: " .. tostring(err)
+      end
+
+      return true
+    end)
+    .is_truthy(msg)
 end
+
 
 for _, strategy in helpers.each_strategy() do
 
@@ -53,36 +91,36 @@ describe("kong reload #" .. strategy, function()
   end)
 
   it("reloads from a --conf argument", function()
+    assert_not_connect(9002, "before starting kong")
+
     assert(helpers.start_kong({
       proxy_listen = "0.0.0.0:9002"
     }, nil, true))
 
-    assert_connect(9002)
-
-    local workers = helpers.get_kong_workers()
+    assert_connect(9002, "after starting kong")
+    assert_not_connect(9002, "after staring kong (but before reloading)")
 
     local nginx_pid = assert(helpers.file.read(helpers.test_conf.nginx_pid),
                              "no nginx master PID")
 
     assert(helpers.kong_exec("reload --conf spec/fixtures/reload.conf"))
 
-    helpers.wait_until_no_common_workers(workers, 1)
+    assert_connect(9000, "after reloading kong")
+    assert_not_connect(9002, "after reloading kong")
 
     -- same master PID
     assert.equal(nginx_pid, helpers.file.read(helpers.test_conf.nginx_pid))
-
-    assert_connect(9000)
-    assert_not_connect(9002)
   end)
 
   it("reloads from environment variables", function()
+    assert_not_connect(9002, "before starting kong")
+
     assert(helpers.start_kong({
       proxy_listen = "0.0.0.0:9002"
     }, nil, true))
 
-    assert_connect(9002)
-
-    local workers = helpers.get_kong_workers()
+    assert_connect(9002, "after starting kong")
+    assert_not_connect(9000, "after staring kong (but before reloading")
 
     local nginx_pid = assert(helpers.file.read(helpers.test_conf.nginx_pid),
                              "no nginx master PID")
@@ -91,39 +129,28 @@ describe("kong reload #" .. strategy, function()
       proxy_listen = "0.0.0.0:9000"
     }))
 
-    helpers.wait_until_no_common_workers(workers, 1)
+    assert_connect(9000, "after reloading kong")
+    assert_not_connect(9002, "after reloading kong")
 
     -- same master PID
     assert.equal(nginx_pid, helpers.file.read(helpers.test_conf.nginx_pid))
-
-    assert_connect(9000)
-    assert_not_connect(9002)
   end)
 
   it("accepts a custom nginx template", function()
+    assert_not_connect(9002, "before starting kong")
+
     assert(helpers.start_kong({
       proxy_listen = "0.0.0.0:9002"
     }, nil, true))
 
-    local workers = helpers.get_kong_workers()
-
-    assert_connect(9002)
+    assert_connect(9002, "after starting kong")
+    assert_not_connect(helpers.mock_upstream_port, "after starting kong "
+                       .. "(but before reloading)")
 
     assert(helpers.kong_exec("reload --conf " .. helpers.test_conf_path
            .. " --nginx-conf spec/fixtures/custom_nginx.template"))
 
-
-    helpers.wait_until_no_common_workers(workers, 1)
-
-    -- new server
-    client = helpers.http_client(helpers.mock_upstream_host,
-                                 helpers.mock_upstream_port,
-                                 5000)
-    local res = assert(client:send {
-      path = "/get",
-    })
-    assert.res_status(200, res)
-    client:close()
+    assert_connect(helpers.mock_upstream_port, "after reloading kong")
   end)
 
   it("clears the 'kong' shm", function()
@@ -537,7 +564,7 @@ end)
 end
 
 
-describe("key-auth plugin invalidation on dbless reload #off", function()
+describe("#only key-auth plugin invalidation on dbless reload #off", function()
   it("(regression - issue 5705)", function()
     local admin_client
     local proxy_client
@@ -559,14 +586,14 @@ describe("key-auth plugin invalidation on dbless reload #off", function()
     ]])
 
     finally(function()
-      os.remove(yaml_file)
+      --os.remove(yaml_file)
       if admin_client then
         admin_client:close()
       end
       if proxy_client then
         proxy_client:close()
       end
-      helpers.stop_kong()
+      helpers.stop_kong(nil, true)
     end)
 
     assert(helpers.start_kong({
@@ -628,6 +655,9 @@ describe("key-auth plugin invalidation on dbless reload #off", function()
     ]], yaml_file)
     assert(helpers.reload_kong("off", "reload --prefix " .. helpers.test_conf.prefix, {
       declarative_config = yaml_file,
+      database = "off",
+      nginx_worker_processes = 1,
+      nginx_conf = "spec/fixtures/custom_nginx.template",
     }))
 
     local res
@@ -643,8 +673,16 @@ describe("key-auth plugin invalidation on dbless reload #off", function()
       local body = assert.res_status(200, res)
       local json = cjson.decode(body)
       admin_client:close()
-      assert.same(1, #json.data)
-      return "my-new-key" == json.data[1].key
+
+      if #json.data ~= 1 then
+        return nil, { message = "expected 1 key-auth credential", data = json }
+      end
+
+      if json.data[1].key ~= "my-new-key" then
+        return nil, { message = "unexpected credential key value", data = json }
+      end
+
+      return true
     end, 5)
 
     helpers.wait_until(function()
