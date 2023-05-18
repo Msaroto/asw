@@ -44,6 +44,40 @@ cc_toolchain(
     toolchain_identifier = "local_aarch64-linux-gnu_cc_toolchain",
 )
 
+toolchain(
+    name = "macos_aarch64-linux-gnu_toolchain",
+    exec_compatible_with = [
+        "@platforms//os:macos",
+    ],
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:aarch64",
+        "//:glibc_system",
+    ],
+    toolchain = ":macos_aarch64-linux-gnu_cc_toolchain",
+    toolchain_type = "@bazel_tools//tools/cpp:toolchain_type",
+)
+
+cc_toolchain_config(
+    name = "macos_aarch64-linux-gnu_cc_toolchain_config",
+    compiler_configuration = {},
+    target_cpu = "aarch64",
+    tools_path_prefix = "/opt/homebrew/bin/aarch64-unknown-linux-gnu-",
+)
+
+cc_toolchain(
+    name = "macos_aarch64-linux-gnu_cc_toolchain",
+    all_files = ":empty",
+    compiler_files = ":empty",
+    dwp_files = ":empty",
+    linker_files = ":empty",
+    objcopy_files = ":empty",
+    strip_files = ":empty",
+    supports_param_files = 0,
+    toolchain_config = ":macos_aarch64-linux-gnu_cc_toolchain_config",
+    toolchain_identifier = "macos_aarch64-linux-gnu_cc_toolchain",
+)
+
 ###################
 # managed toolchains (downloaded by Bazel)
 
