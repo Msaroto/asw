@@ -9,7 +9,6 @@ filegroup(
     ),
 )
 
-# pcre cmake detects cross compile automatically
 cmake(
     name = "pcre",
     build_args = [
@@ -21,7 +20,16 @@ cmake(
         "PCRE_BUILD_PCREGREP": "OFF",  # we don't need the cli binary
         "PCRE_BUILD_TESTS": "OFF",  # test doesn't compile on aarch64-linux-gnu (cross)
         "CMAKE_INSTALL_LIBDIR": "lib",  # force distros that uses lib64 (rhel family) to use lib
-    },
+        "CMAKE_SYSTEM_NAME": "Linux",
+        "CMAKE_SYSTEM_PROCESSOR": "ARM",
+    } | select({
+        "//conditions:default": {},
+        # force the following two so it works on macos to linux cross build
+        "@kong//:any-linux-cross": {
+            "CMAKE_SYSTEM_NAME": "Linux",
+            "CMAKE_SYSTEM_PROCESSOR": "ARM",
+        },
+    }),
     lib_source = ":all_srcs",
     out_static_libs = ["libpcre.a"],
     visibility = ["//visibility:public"],

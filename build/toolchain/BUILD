@@ -27,12 +27,11 @@ cc_toolchain_config(
     name = "local_aarch64-linux-gnu_cc_toolchain_config",
     compiler_configuration = {},
     target_cpu = "aarch64",
-    toolchain_path_prefix = "/usr/aarch64-linux-gnu/",  # is this required?
     tools_path_prefix = "/usr/bin/aarch64-linux-gnu-",
 )
 
 cc_toolchain(
-    name = "local_aarch64-linux-gnu_cc_toolchain",
+    name = "local_macos_aarch64-linux-gnu_cc_toolchain",
     all_files = ":empty",
     compiler_files = ":empty",
     dwp_files = ":empty",
@@ -48,6 +47,7 @@ toolchain(
     name = "macos_aarch64-linux-gnu_toolchain",
     exec_compatible_with = [
         "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
     ],
     target_compatible_with = [
         "@platforms//os:linux",

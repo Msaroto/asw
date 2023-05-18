@@ -61,6 +61,7 @@ load("//build/toolchain:repositories.bzl", "toolchain_repositories")
 toolchain_repositories()
 
 register_toolchains("//build/toolchain:local_aarch64-linux-gnu_toolchain")
+
 register_toolchains("//build/toolchain:macos_aarch64-linux-gnu_toolchain")
 
 load("//build/toolchain:managed_toolchain.bzl", "register_managed_toolchain")

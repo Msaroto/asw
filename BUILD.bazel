@@ -252,12 +252,19 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
-selects.config_setting_group(
-    # matches all cross build platforms
+config_setting(
     name = "any-cross",
-    match_any = [
-        ":aarch64-linux-anylibc-cross",
-        ":x86_64-linux-musl-cross",
+    constraint_values = [
+        ":cross_build",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "any-linux-cross",
+    constraint_values = [
+        "@platforms//os:linux",
+        ":cross_build",
     ],
     visibility = ["//visibility:public"],
 )
