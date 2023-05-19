@@ -987,6 +987,11 @@ for _, strategy in helpers.each_strategy() do
         assert.res_status(200, res_1)
         assert.equal("2", res_1.headers["Dummy-Plugin"])
 
+        helpers.wait_for_all_config_update({
+          forced_admin_port = 8001, -- using admin 8001
+          forced_proxy_port = 9000, -- waiting for proxy 9000
+        })
+
         assert_proxy_2_wait({
           method  = "GET",
           path    = "/status/200",
