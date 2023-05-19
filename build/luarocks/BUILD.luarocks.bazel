@@ -114,6 +114,11 @@ export CC=$$CC
 export LD=$$LD
 export EXT_BUILD_ROOT=$$WORKSPACE_PATH # for musl
 
+if [[ "$$OSTYPE" == "darwin"* &&  "$(CC)" == *"linux"* ]]; then
+    chmod -R +w "$$WORKSPACE_PATH/$$LUAROCKS_HOST/bin"
+    sed -i -e "s/{ SYSCONFDIR =/{ SYSTEM = 'linux', SYSCONFDIR =/g" "$$WORKSPACE_PATH/$$LUAROCKS_HOST/bin/luarocks"
+fi
+
 # force the interpreter here instead of invoking luarocks directly,
 # some distros has BINPRM_BUF_SIZE smaller than the shebang generated,
 # which is usually more than 160 bytes
