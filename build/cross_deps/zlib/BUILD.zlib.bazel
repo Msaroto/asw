@@ -42,7 +42,14 @@ cmake(
         # Only allow aligned address.
         # Reference: https://github.com/zlib-ng/zlib-ng#advanced-build-options.
         "UNALIGNED_OK": "off",
-    },
+    } | select({
+        "//conditions:default": {},
+        # force the following two so it works on macos to linux cross build
+        "@kong//:any-linux-cross": {
+            "CMAKE_SYSTEM_NAME": "Linux",
+            "CMAKE_SYSTEM_PROCESSOR": "ARM",
+        },
+    }),
     lib_source = ":all_srcs",
     out_shared_libs = ["libz.so.1"],
     visibility = ["//visibility:public"],

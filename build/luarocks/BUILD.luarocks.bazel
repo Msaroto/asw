@@ -66,8 +66,8 @@ ROCKS_CONFIG=$$(readlink -f "$$ROCKS_DIR/../luarocks_config.lua")
 
 OPENSSL_DIR=$$WORKSPACE_PATH/$$(echo '$(locations @openssl)' | awk '{print $$1}')
 
-# we use system libyaml on macos
-if [[ "$$OSTYPE" == "darwin"* ]]; then
+# we use system libyaml on macos, but not when cross compiling to linux
+if [[ "$$OSTYPE" == "darwin"* && "$(CC)" != *"linux"* ]]; then
     YAML_DIR=$$(brew --prefix)/opt/libyaml
 elif [[ -d $$WORKSPACE_PATH/$(BINDIR)/external/cross_deps_libyaml/libyaml ]]; then
     # TODO: is there a good way to use locations but doesn't break non-cross builds?
@@ -114,7 +114,7 @@ export CC=$$CC
 export LD=$$LD
 export EXT_BUILD_ROOT=$$WORKSPACE_PATH # for musl
 
-if [[ "$$OSTYPE" == "darwin"* &&  "$(CC)" == *"linux"* ]]; then
+if [[ "$$OSTYPE" == "darwin"* && "$(CC)" == *"linux"* ]]; then
     chmod -R +w "$$WORKSPACE_PATH/$$LUAROCKS_HOST/bin"
     sed -i -e "s/{ SYSCONFDIR =/{ SYSTEM = 'linux', SYSCONFDIR =/g" "$$WORKSPACE_PATH/$$LUAROCKS_HOST/bin/luarocks"
 fi
