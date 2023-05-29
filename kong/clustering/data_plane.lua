@@ -10,6 +10,7 @@ local declarative = require("kong.db.declarative")
 local constants = require("kong.constants")
 local utils = require("kong.tools.utils")
 local pl_stringx = require("pl.stringx")
+local process = require("ngx.process")
 
 
 local assert = assert
@@ -225,6 +226,12 @@ function _M:communicate(premature)
 
       if next_data == data then
         next_data = nil
+      end
+
+      if process.type() == "privileged agent" then
+        -- because of resurrection, objects with finalizers are collected in two phases
+        collectgarbage()
+        collectgarbage()
       end
 
       ::continue::
