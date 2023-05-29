@@ -635,7 +635,6 @@ function Kong.init()
 
     kong.db.declarative_config = dc
 
-
     if is_http_module or
        (#config.proxy_listeners == 0 and
         #config.admin_listeners == 0 and
@@ -679,10 +678,19 @@ function Kong.init()
       error(err)
     end
   end
+
+  -- because of resurrection, objects with finalizers are collected in two phases
+  collectgarbage()
+  collectgarbage()
 end
 
 
 function Kong.init_worker()
+  if process.type() == "privileged agent" then
+    collectgarbage("setpause", 100)
+    collectgarbage("setstepmul", 300)
+  end
+
   local ctx = ngx.ctx
 
   ctx.KONG_PHASE = PHASES.init_worker
@@ -719,6 +727,8 @@ function Kong.init_worker()
               list_migrations(schema_state.pending_migrations))
     end
   end
+
+  schema_state = nil
 
   local worker_events, err = kong_global.init_worker_events()
   if not worker_events then
@@ -758,6 +768,11 @@ function Kong.init_worker()
     if kong.clustering then
       kong.clustering:init_worker()
     end
+
+    -- because of resurrection, objects with finalizers are collected in two phases
+    collectgarbage()
+    collectgarbage()
+
     return
   end
 
@@ -791,6 +806,11 @@ function Kong.init_worker()
                                         declarative_entities,
                                         declarative_meta,
                                         declarative_hash)
+
+      declarative_entities = nil
+      declarative_meta = nil
+      declarative_hash = nil
+
       if not ok then
         stash_init_worker_error("failed to load declarative config file: " .. err)
         return
@@ -849,6 +869,10 @@ function Kong.init_worker()
   if kong.clustering then
     kong.clustering:init_worker()
   end
+
+  -- because of resurrection, objects with finalizers are collected in two phases
+  collectgarbage()
+  collectgarbage()
 end
 
 
