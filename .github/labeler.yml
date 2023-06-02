@@ -164,4 +164,10 @@ plugins/udp-log:
 plugins/zipkin:
 - kong/plugins/zipkin/**/*
 
-
+schema-change-noteworthy:
+- kong/db/schema/**/*.lua
+- kong/**/schema.lua
+- kong/plugins/**/daos.lua
+- plugins-ee/**/daos.lua
+- plugins-ee/**/schema.lua
+- kong/db/dao/*.lua
