@@ -50,6 +50,7 @@ exit_worker_by_lua_block {
 > if (role == "traditional" or role == "data_plane") and #proxy_listeners > 0 then
 # Load variable indexes
 lua_kong_load_var_index default;
+lua_kong_load_var_index $request_id;
 
 upstream kong_upstream {
     server 0.0.0.1;
