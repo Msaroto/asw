@@ -1701,7 +1701,6 @@ describe("Configuration loader", function()
         wasm_compiler = "auto",
         wasm_shm_kv = "kong_shared_kv 4k",
         wasm_shm_queue = "kong_shared_queue 1024k",
-        wasm_tls_no_verify_warn = "on",
         lua_ssl_verify_depth = "1",
         lua_ssl_trusted_certificate = cert_rel_path,
         nginx_http_large_client_header_buffers = "8 32k",
@@ -1714,7 +1713,6 @@ describe("Configuration loader", function()
       assert.same("auto", conf.wasm_compiler)
       assert.same("kong_shared_kv 4k", conf.wasm_shm_kv)
       assert.same("kong_shared_queue 1024k", conf.wasm_shm_queue)
-      assert.same("on", conf.wasm_tls_no_verify_warn)
       assert.True(search_directive(conf.nginx_wasm_directives, "socket_large_buffers", "8 32k"))
       assert.True(search_directive(conf.nginx_wasm_directives, "socket_buffer_size", "128k"))
       assert.True(search_directive(conf.nginx_wasm_directives, "socket_connect_timeout", "15s"))
@@ -1723,6 +1721,7 @@ describe("Configuration loader", function()
       assert.True(search_directive(conf.nginx_wasm_directives, "tls_trusted_certificate", cert_full_path))
       assert.True(search_directive(conf.nginx_wasm_directives, "tls_verify_cert", "on"))
       assert.True(search_directive(conf.nginx_wasm_directives, "tls_verify_host", "on"))
+      assert.True(search_directive(conf.nginx_wasm_directives, "tls_no_verify_warn", "on"))
     end)
 
     it("#wasm VM injected confs", function()
@@ -1733,7 +1732,6 @@ describe("Configuration loader", function()
         nginx_wasm_compiler = "auto",
         nginx_wasm_shm_kv = "kong_shared_kv 4k",
         nginx_wasm_shm_queue = "kong_shared_queue 1024k",
-        nginx_wasm_tls_no_verify_warn = "on",
       })
       assert.is_nil(err)
       assert.True(search_directive(conf.nginx_wasm_directives, "backtraces", "on"))
