@@ -19,6 +19,8 @@
 
 #### Core
 
+- Add `entity_checks` to /schemas endpoint output
+
 #### Plugins
 
 - Validation for queue related parameters has been
