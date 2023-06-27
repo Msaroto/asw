@@ -90,6 +90,7 @@ local table_new = require "table.new"
 local utils = require "kong.tools.utils"
 local constants = require "kong.constants"
 local get_ctx_table = require("resty.core.ctx").get_ctx_table
+local admin_gui = require "kong.admin_gui"
 
 
 local kong             = kong
@@ -1582,7 +1583,7 @@ local function serve_content(module, options)
 
   options = options or {}
 
-  header["Access-Control-Allow-Origin"] = options.allow_origin or "*"
+  ngx.header["Access-Control-Allow-Origin"] = ngx.req.get_headers()["Origin"] or "*"
 
   lapis.serve(module)
 
@@ -1643,6 +1644,20 @@ function Kong.admin_header_filter()
   --ctx.KONG_ADMIN_HEADER_FILTER_TIME = ctx.KONG_ADMIN_HEADER_FILTER_ENDED_AT - ctx.KONG_ADMIN_HEADER_FILTER_START
 end
 
+function Kong.admin_gui_kconfig_content()
+  local content, err = kong.cache:get(
+    constants.ADMIN_GUI_K_CONFIG_JS_CACHE_KEY,
+    nil,
+    admin_gui.generate_kconfig,
+    kong.configuration
+  )
+  if err then
+    kong.log.err("error occurred while retrieving admin gui config `kconfig.js` from cache", err)
+    kong.response.exit(500, { message = "An unexpected error occurred" })
+  else
+    ngx.say(content)
+  end
+end
 
 function Kong.status_content()
   return serve_content("kong.status")

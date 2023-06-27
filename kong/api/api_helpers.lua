@@ -265,6 +265,27 @@ function _M.before_filter(self)
   return kong.response.exit(415)
 end
 
+function _M.cors_filter(self)
+  local origin = self.req.headers["Origin"]
+
+  if kong.configuration.admin_gui_origin then
+    origin = kong.configuration.admin_gui_origin
+  end
+
+  ngx.header["Access-Control-Allow-Origin"] = origin or "*"
+  ngx.header["Access-Control-Allow-Credentials"] = "true"
+
+  if ngx.req.get_method() == "OPTIONS" then
+    ngx.header["Access-Control-Allow-Methods"] = "GET,PUT,PATCH,POST,DELETE"
+
+    local request_allow_headers = self.req.headers["Access-Control-Request-Headers"]
+    if request_allow_headers then
+      ngx.header["Access-Control-Allow-Headers"] = request_allow_headers
+    end
+
+    return kong.response.exit(204)
+  end
+end
 
 local function parse_params(fn)
   return app_helpers.json_params(function(self, ...)

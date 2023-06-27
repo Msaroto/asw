@@ -240,6 +240,8 @@ local constants = {
 
   DYN_LOG_LEVEL_KEY = "kong:dyn_log_level",
   DYN_LOG_LEVEL_TIMEOUT_AT_KEY = "kong:dyn_log_level_timeout_at",
+
+  ADMIN_GUI_K_CONFIG_JS_CACHE_KEY = "admin_gui:kconfig",
 }
 
 for _, v in ipairs(constants.CLUSTERING_SYNC_STATUS) do
