@@ -27,6 +27,13 @@
   `max_retry_delay` must now be `number`s greater than 0.001
   (seconds).
   [#10840](https://github.com/Kong/kong/pull/10840)
+- **hmac-auth**: Added support for RSA signatures as described in the
+  [draft-cavage-http-signatures](https://datatracker.ietf.org/doc/html/draft-cavage-http-signatures-12) draft,
+  providing a stronger layer of security via asymmetric encryption. Thanks
+  [@mideuger](https://github.com/@mideuger) for contributing this change.
+  [#8530](https://github.com/Kong/kong/pull/8530),
+  [#11133](https://github.com/Kong/kong/pull/11133)
+
 
 ### Additions
 
