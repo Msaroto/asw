@@ -339,6 +339,7 @@ local function new_router(version)
   local routes, i = {}, 0
 
   local err
+
   -- The router is initially created on init phase, where kong.core_cache is
   -- still not ready. For those cases, use a plain Lua table as a cache
   -- instead
@@ -354,6 +355,10 @@ local function new_router(version)
   local detect_changes = db.strategy ~= "off" and kong.core_cache
   local counter = 0
   local page_size = db.routes.pagination.max_page_size
+
+  ngx.update_time()
+  local s = ngx.now() * 1000
+
   for route, err in db.routes:each(page_size, GLOBAL_QUERY_OPTS) do
     if err then
       return nil, "could not load routes: " .. err
@@ -393,6 +398,11 @@ local function new_router(version)
     end
   end
 
+  ngx.update_time()
+  if ngx.worker.id() == 0 then
+    ngx.log(ngx.ERR, "took ", ngx.now() * 1000 - s, " ms to loop over ", i, " routes")
+  end
+
   local n = DEFAULT_MATCH_LRUCACHE_SIZE
   local cache_size = min(ceil(max(i / n, 1)) * n, n * 20)
 
@@ -401,10 +411,19 @@ local function new_router(version)
     ROUTER_CACHE_SIZE = cache_size
   end
 
+  ngx.update_time()
+  local s = ngx.now() * 1000
+
   local new_router, err = Router.new(routes, ROUTER_CACHE, ROUTER_CACHE_NEG, ROUTER)
   if not new_router then
     return nil, "could not create router: " .. err
   end
+
+  ngx.update_time()
+  if ngx.worker.id() == 0 then
+    ngx.log(ngx.ERR, "took ", ngx.now() * 1000 - s, " ms to new router")
+  end
+
 
   local _, err = kong_shm:incr(ROUTERS_REBUILD_COUNTER_KEY, 1, 0)
   if err then
@@ -636,8 +655,10 @@ do
           return nil, err
         end
 
-        log(INFO, "building a new router took ",  get_now_ms() - start,
-                  " ms on worker #", worker_id)
+        if ngx.worker.id() == 0 then
+          log(ERR, "building a new router took ",  get_now_ms() - start,
+                    " ms on worker #", worker_id)
+        end
       end
 
       local plugins_iterator

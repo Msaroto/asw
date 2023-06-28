@@ -16,13 +16,22 @@ local gen_for_field   = atc.gen_for_field
 local split_host_port = atc.split_host_port
 
 
+local yield = utils.yield
+
+
 local type = type
 local pairs = pairs
+
 local ipairs = ipairs
+local error = error
 local assert = assert
 local tb_insert = table.insert
+local tostring = tostring
 local byte = string.byte
-local bor, band, lshift = bit.bor, bit.band, bit.lshift
+local bor = bit.bor
+local band = bit.band
+local lshift = bit.lshift
+local get_phase = ngx.get_phase
 
 
 local ngx       = ngx
@@ -366,9 +375,11 @@ end
 
 local function split_routes_and_services_by_path(routes_and_services)
   local routes_and_services_split = tb_new(#routes_and_services, 0)
+  local phase = get_phase()
 
   for i = 1, #routes_and_services do
     split_route_by_path_into(routes_and_services[i], routes_and_services_split)
+    yield(true, phase)
   end
 
   return routes_and_services_split
@@ -381,7 +392,14 @@ function _M.new(routes_and_services, cache, cache_neg, old_router)
     return error("expected arg #1 routes to be a table", 2)
   end
 
+  ngx.update_time()
+  local s = ngx.now() * 1000
   routes_and_services = split_routes_and_services_by_path(routes_and_services)
+  ngx.update_time()
+  if ngx.worker.id() == 0 then
+    ngx.log(ngx.ERR, "took ", ngx.now() * 1000 - s, " ms to split routes and services by path")
+  end
+
 
   return atc.new(routes_and_services, cache, cache_neg, old_router, get_exp_and_priority)
 end

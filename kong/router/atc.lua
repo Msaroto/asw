@@ -321,10 +321,22 @@ function _M.new(routes, cache, cache_neg, old_router, get_exp_and_priority)
   local router, err
 
   if not old_router then
+    ngx.update_time()
+    local s = ngx.now() * 1000
     router, err = new_from_scratch(routes, get_exp_and_priority)
+    ngx.update_time()
+    if ngx.worker.id() == 0 then
+      ngx.log(ngx.ERR, "took ", ngx.now() * 1000 - s, " ms to new from scratch")
+    end
 
   else
+    ngx.update_time()
+    local s = ngx.now() * 1000
     router, err = new_from_previous(routes, get_exp_and_priority, old_router)
+    ngx.update_time()
+    if ngx.worker.id() == 0 then
+      ngx.log(ngx.ERR, "took ", ngx.now() * 1000 - s, " ms to new from previous")
+    end
   end
 
   if not router then

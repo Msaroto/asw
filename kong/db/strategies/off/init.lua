@@ -146,15 +146,26 @@ local function page_for_key(self, key, size, offset, options)
     end
 
   else
+    ngx.update_time()
+    local s = ngx.now() * 1000
+
     list, err = unmarshall(lmdb_get(key))
     if err then
       return nil, err
     end
 
     list = list or {}
+
+    ngx.update_time()
+    if ngx.worker.id() == 0 then
+      ngx.log(ngx.ERR, "took ", ngx.now() * 1000 - s, " ms getting list of ", self.schema.name)
+    end
   end
 
   yield()
+
+  ngx.update_time()
+  local s = ngx.now() * 1000
 
   local ret = {}
   local schema = self.schema
@@ -198,7 +209,16 @@ local function page_for_key(self, key, size, offset, options)
   end
 
   if offset then
+    ngx.update_time()
+    if ngx.worker.id() == 0 then
+      ngx.log(ngx.ERR, "took ", ngx.now() * 1000 - s, " ms to process list")
+    end
     return ret, nil, encode_base64(tostring(offset + size), true)
+  end
+
+  ngx.update_time()
+  if ngx.worker.id() == 0 then
+    ngx.log(ngx.ERR, "took ", ngx.now() * 1000 - s, " ms to process list")
   end
 
   return ret
