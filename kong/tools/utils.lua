@@ -1656,9 +1656,6 @@ do
   local counter = YIELD_ITERATIONS
 
   function _M.yield(in_loop, phase)
-    if ngx.IS_CLI then
-      return
-    end
     phase = phase or get_phase()
     if phase == "init" or phase == "init_worker" then
       return

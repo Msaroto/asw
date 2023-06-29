@@ -195,10 +195,7 @@ local setkeepalive
 
 local function reconnect(config)
   local phase = get_phase()
-  if phase == "init" or phase == "init_worker" or ngx.IS_CLI then
-    -- Force LuaSocket usage in the CLI in order to allow for self-signed
-    -- certificates to be trusted (via opts.cafile) in the resty-cli
-    -- interpreter (no way to set lua_ssl_trusted_certificate).
+  if phase == "init" or phase == "init_worker" then
     config.socket_type = "luasocket"
 
   else
