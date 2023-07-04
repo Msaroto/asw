@@ -1657,7 +1657,7 @@ do
 
   function _M.yield(in_loop, phase)
     phase = phase or get_phase()
-    if phase == "init" or phase == "init_worker" then
+    if phase == "init" or phase == "init_worker" or ngx.IS_CLI then
       return
     end
     if in_loop then
