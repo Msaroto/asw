@@ -110,6 +110,12 @@ for _, strategy in helpers.each_strategy() do
       assert.is_nil(err)
       assert.is_table(db)
 
+      -- the schema is only set when the socket is new
+      -- but here in tests because in spec/helpers.lua the db is init'ed and
+      -- setkeepalive, so the connection may be reused,
+      -- so we need to close the original connection and connect a new one
+      assert(db:connect())
+      assert(db:close())
       assert(db:init_connector())
 
       local infos = db.infos
