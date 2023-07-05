@@ -10,6 +10,9 @@ for _, strategy in helpers.each_strategy() do
     lazy_setup(function()
       assert(helpers.start_grpc_target())
 
+      helpers.db:connect()
+      helpers.db:close()
+
       local bp = helpers.get_db_utils(strategy, {
         "routes",
         "services",

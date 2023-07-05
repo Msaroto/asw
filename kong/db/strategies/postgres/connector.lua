@@ -295,7 +295,7 @@ function _mt:init()
   local res, err = self:query("SHOW server_version_num;")
   local ver = tonumber(res and res[1] and res[1].server_version_num)
   if not ver then
-    return nil, "failed to retrieve PostgreSQL server_version_num: " .. err
+    return nil, "failed to retrieve PostgreSQL server_version_num: " .. err or ""
   end
 
   local major = floor(ver / 10000)
