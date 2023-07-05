@@ -342,6 +342,7 @@ local function retrieve_log(logname)
   local len = logger:llen(logname)
   local entries = {}
 
+  print("NUMBER = ", len)
   for i = 1, len do
     local encoded_stored = assert(logger:lpop(logname))
     local stored = cjson.decode(encoded_stored)

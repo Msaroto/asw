@@ -464,7 +464,7 @@ for _, strategy in helpers.each_strategy() do
       end)
     end)
 
-    it("logs to HTTP (#grpc)", function()
+    it("logs to HTTP (#grpc) #o", function()
       -- Making the request
       local ok, resp = proxy_client_grpc({
         service = "hello.HelloService.SayHello",
@@ -498,7 +498,7 @@ for _, strategy in helpers.each_strategy() do
       end, 10)
     end)
 
-    it("logs to HTTP (#grpcs)", function()
+    it("#o logs to HTTP (#grpcs)", function()
       -- Making the request
       local ok, resp = proxy_client_grpcs({
         service = "hello.HelloService.SayHello",
@@ -509,8 +509,8 @@ for _, strategy in helpers.each_strategy() do
           ["-authority"] = "http_logging_grpcs.test",
         }
       })
-      assert.truthy(ok)
       assert.truthy(resp)
+      assert.truthy(ok)
 
       helpers.wait_until(function()
         local client = assert(helpers.http_client(helpers.mock_upstream_host,
@@ -528,6 +528,13 @@ for _, strategy in helpers.each_strategy() do
           assert.same("application/grpc", body.entries[1].request.headers["content-type"])
           assert.same("application/grpc", body.entries[1].response.headers["content-type"])
           return true
+        else
+          -- this test is a known flaky, adding some debugging info
+          print"[["
+          print(body.entries)
+          print"-----"
+          print(raw)
+          print"]]"
         end
       end, 10)
     end)
