@@ -1,0 +1,3 @@
+message: ${MESSAGE}
+type: ${TYPE}
+pr: ${PR}

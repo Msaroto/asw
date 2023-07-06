@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+
+CHANGELOG_PATH="CHANGELOG"
+UNRELEASED_PATH="$CHANGELOG_PATH/unreleased"
+CHANGELOG_TEMPLATE_FILE="$CHANGELOG_PATH/template.yaml"
+
+FIXED_ENTRIES=()
+FEAT_ENTRIES=()
+CHORE_ENTRIES=()
+
+function usage {
+cat << EOF
+Usage: changelog command [options...]
+
+Options:
+  -f,  --filename      changelog filename
+  -m,  --message       changelog message
+  -t,  --type          changelog type, fixed|feat
+  --pr                 changelog PR number
+
+  -v,  --version       release version
+
+Commands:
+  add         add a changelog file.
+
+  release     release a release log based on the files in the CHANGELOG/unreleased directory.
+EOF
+}
+
+function warn() {
+  >&2 \echo -en "\033[1;33m"
+  >&2 echo "WARNING: $*"
+  >&2 \echo -en "\033[0m"
+}
+
+function err() {
+  >&2 \echo -en "\033[31m"
+  >&2 echo "Error: $*"
+  >&2 \echo -en "\033[0m"
+  exit 1
+}
+
+function parse_args {
+  ! [[ $1 =~ ^- ]] && COMMAND=$1 && shift
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -f|--filename)
+        FILENAME="$2"
+        shift
+        ;;
+      -t|--type)
+        TYPE="$2"
+        shift
+        ;;
+      -m|--message)
+        MESSAGE="$2"
+        shift
+        ;;
+      -v|--version)
+        VERSION="$2"
+        shift
+        ;;
+      --pr)
+        PR="$2"
+        ;;
+      -*|--*)
+        echo "Unknown option $1"
+        exit 1
+        ;;
+      *)
+        POSITIONAL_ARGS+=("$1")
+        ;;
+    esac
+    shift
+  done
+}
+
+function validate_args {
+  case $COMMAND in
+    add)
+      [[ -z "$FILENAME" ]] && err "missing argument -f|--filename"
+      ;;
+    release)
+      [[ -z "$VERSION" ]] && err "missing argument -v|--version"
+      ;;
+  esac
+}
+
+# add a changelog file
+function add {
+  [ ! -d "$UNRELEASED_PATH" ] && err "Directory $UNRELEASED_PATH does not exist"
+
+  [ ! -f "$CHANGELOG_TEMPLATE_FILE" ] && err "Changelog template file does not exists"
+
+  local changelog_file="$UNRELEASED_PATH/${FILENAME}.yaml"
+  [ -f "$changelog_file" ] && err "File $changelog_file exists"
+
+  touch "$changelog_file"
+  local template="$(cat $CHANGELOG_TEMPLATE_FILE)"
+  eval "echo \"${template}\"" >> "$changelog_file"
+  echo "Changelog file ${FILENAME}.yaml added"
+}
+
+
+function gen_content {
+  cat << EOF
+## ${VERSION}
+
+### Added
+
+EOF
+  declare -n e1
+  for e1 in "${FEAT_ENTRIES[@]}"; do
+    cat << EOF
+  - ${e1["title"]} [#${e1["pr"]}](https://github.com/vm-001/zoch/pull/${e1["pr"]})
+EOF
+done
+cat << EOF
+
+### Fixed
+
+EOF
+  declare -n e2
+  for e2 in "${FIXED_ENTRIES[@]}"; do
+    cat << EOF
+  - ${e2["title"]} [#${e2["pr"]}](https://github.com/vm-001/zoch/pull/${e2["pr"]})
+EOF
+done
+cat << EOF
+
+### Chore
+
+EOF
+  declare -n e3
+  for e3 in "${CHORE_ENTRIES[@]}"; do
+    cat << EOF
+  - ${e3["title"]} [#${e3["pr"]}](https://github.com/vm-001/zoch/pull/${e3["pr"]})
+EOF
+done
+}
+
+function parse_yaml() {
+  local file=$1
+  declare -n map=$2
+  map["type"]=`cat $f | yq '.type'`
+  map["title"]=`cat $f | yq '.message'`
+  map["pr"]=`cat $f | yq '.pr'`
+}
+
+# release a release note
+function release {
+  [ ! -d "${CHANGELOG_PATH}" ] && err "Directory $CHANGELOG_PATH does not exist"
+
+  local changelog_file="$CHANGELOG_PATH/${VERSION}.md"
+  [ -f "$changelog_file" ] && err "File $changelog_file exists"
+
+  local files="CHANGELOG/unreleased/*"
+  local i=0
+  for f in $files; do
+    i=$((i +1))
+    #echo "Processing $f"
+    declare -A "entry$i"
+    parse_yaml $f entry$i
+    var="entry$i"
+    #declare -p "entry$i"
+    eval "type=\${$var[\"type\"]}"
+    if [[ "$type" == "fixed" ]]; then
+      FIXED_ENTRIES+=(${var})
+    elif [[ "${type}" == "feat" ]]; then
+      FEAT_ENTRIES+=(${var})
+     elif [[ "${type}" == "chore" ]]; then
+      CHORE_ENTRIES+=(${var})
+    fi
+  done
+
+  touch "$changelog_file"
+  gen_content > "$changelog_file"
+  rm $UNRELEASED_PATH/*
+  echo "release $changelog_file success"
+}
+
+main() {
+  parse_args "$@"
+  validate_args
+
+  case $COMMAND in
+  help)
+    usage
+    ;;
+  add)
+    add
+    ;;
+  release)
+    release
+    ;;
+  *)
+    usage
+  esac
+}
+
+main "$@"
+exit_status=$?
+exit $exit_status

@@ -1,0 +1,58 @@
+name: Changelog
+
+on:
+  pull_request:
+    types: [ "opened" ]
+
+jobs:
+  add-changelog:
+    name: Add changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - uses: actions/checkout@v3
+        if: github.event_name == 'push'
+        with:
+          fetch-depth: 0
+
+      - name: Add a changelog file
+        run: |
+          bin/changelog add -f ${{ github.event.pull_request.number }} -m "${{ github.event.pull_request.title }}" -t fixed --pr ${{ github.event.pull_request.number }}
+
+          git config --local user.email "$(git log -n 1 --pretty=format:%ae)"
+          git config --local user.name "$(git log -n 1 --pretty=format:%an)"
+          git add CHANGELOG/unreleased/${{ github.event.pull_request.number }}.yaml
+          git commit -m "Add changelog file CHANGELOG/unreleased/${{ github.event.number }}.yaml"
+          git push
+
+      - name: Leave a comment
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            github.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "I've created a changelog YAML for you."
+            })
+
+
+#  validate-changelog:
+#    name: Validate changelog
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v3
+#
+#      - name: Validate changelogs
+#        uses: thiagodnf/yaml-schema-checker@v0.0.8
+#        with:
+#          jsonSchemaFile: CHANGELOG/schema.json
+#          yamlFiles: |
+#            CHANGELOG/unreleased/*.yaml
