@@ -12,6 +12,7 @@ local modules = {
   require "spec.helpers.http_mock.clients",
 }
 
+---@class http_mock
 local http_mock = {}
 
 -- since http_mock contains a lot of functionality, it is implemented in separate submodules
@@ -43,10 +44,11 @@ local function default_field(tbl, key, default)
 end
 
 -- create a mock instance which represents a HTTP mocking server
--- @param listens: the listen directive of the mock server, defaults to "0.0.0.0:8000"
--- @param code: the code of the mock server, defaults to a simple response.
--- @param opts: options for the mock server, left it empty to use the defaults
--- @return: a mock instance
+-- @param listens table|string|number|nil: the listen directive of the mock server, defaults to a random available port
+-- @param routes table|string|nil: the code of the mock server, defaults to a simple response.
+-- @param opts table|nil: options for the mock server, left it empty to use the defaults
+-- @return http_mock: a mock instance
+-- @return number: the port the mock server listens to
 -- @usage
 -- local mock = http_mock.new(8000, [[
 --   ngx.req.set_header("X-Test", "test")
@@ -101,7 +103,7 @@ end
 -- or a string, which will be used as the access phase handler.
 --
 -- opts:
--- prefix: the prefix of the mock server, defaults to "mockserver"
+-- prefix: the prefix of the mock server, defaults to "servroot_tapping"
 -- hostname: the hostname of the mock server, defaults to "_"
 -- directives: the extra directives of the mock server, defaults to {}
 -- log_opts: the options for logging with fields listed below:
@@ -145,7 +147,7 @@ function http_mock.new(listens, routes, opts)
   default_field(log_opts, "resp_body", false)
   default_field(log_opts, "err", true)
 
-  local prefix = opts.prefix or "mockserver"
+  local prefix = opts.prefix or "servroot_mock"
   local hostname = opts.hostname or "_"
   local directives = opts.directives or {}
 
@@ -172,7 +174,7 @@ function http_mock.new(listens, routes, opts)
 
   _self:_set_eventually_table()
   _self:_setup_debug()
-  return _self
+  return _self, port
 end
 
 function http_mock:get_default_port()
