@@ -99,10 +99,6 @@
   [#10559](https://github.com/Kong/kong/pull/10559)
 - **Zipkin**: Fixed an issue that traces not being generated correctly when instrumentations are enabled.
   [#10983](https://github.com/Kong/kong/pull/10983)
-- **Prometheus**: rework `lmdb_usage` related metrics in Prometheus plugin.
-  [#11032](https://github.com/Kong/kong/pull/11032)
-- **Statsd**: rework `lmdb_usage` related metrics in Statsd plugin.
-  [#11032](https://github.com/Kong/kong/pull/11032)
 
 #### PDK
 - Rework pdk lmdb environment information with `kong.node.get_memory_stats`.
@@ -134,6 +130,11 @@
 
 #### Plugins
 
+- **Prometheus**: rework `lmdb_usage` related metrics in Prometheus plugin.
+  [#11032](https://github.com/Kong/kong/pull/11032)
+- **Statsd**: rework `lmdb_usage` related metrics in Statsd plugin.
+  [#11032](https://github.com/Kong/kong/pull/11032)
+
 ### Dependencies
 
 - Bumped lua-resty-openssl from 0.8.20 to 0.8.23
@@ -151,6 +152,8 @@
   [#11140](https://github.com/Kong/kong/pull/11140)
 - Bumped pgmoon from 1.16.0 to 1.16.1 (Kong's fork)
   [#11181](https://github.com/Kong/kong/pull/11181)
+- Bumped lua-resty-lmdb from 1.1.0 to 1.2.0
+  [#11032](https://github.com/Kong/kong/pull/11032)
 
 ## 3.3.0
 
@@ -290,7 +293,6 @@
   [#9903](https://github.com/Kong/kong/pull/9903)
 - PDK now supports getting lmdb environment information with `kong.node.get_memory_stats`.
   [#10301](https://github.com/Kong/kong/pull/10301)
-  [#11032](https://github.com/Kong/kong/pull/11032)
 
 ### Fixes
 
