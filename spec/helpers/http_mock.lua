@@ -1,3 +1,6 @@
+--- Module implementing http_mock, a HTTP mocking server for testing.
+-- @module spec.helpers.http_mock
+
 local helpers = require "spec.helpers"
 
 local pairs = pairs
@@ -12,7 +15,6 @@ local modules = {
   require "spec.helpers.http_mock.clients",
 }
 
----@class http_mock
 local http_mock = {}
 
 -- since http_mock contains a lot of functionality, it is implemented in separate submodules
@@ -43,12 +45,22 @@ local function default_field(tbl, key, default)
   end
 end
 
--- create a mock instance which represents a HTTP mocking server
--- @param listens table|string|number|nil: the listen directive of the mock server, defaults to a random available port
--- @param routes table|string|nil: the code of the mock server, defaults to a simple response.
--- @param opts table|nil: options for the mock server, left it empty to use the defaults
--- @return http_mock: a mock instance
--- @return number: the port the mock server listens to
+--- create a mock instance which represents a HTTP mocking server
+-- @tparam[opt] table|string|number listens the listen directive of the mock server, defaults to a random available port
+-- @tparam[opt] table|string routes the code of the mock server, defaults to a simple response.
+-- @tparam[opt={}] table opts options for the mock server, supporting fields:
+-- @tparam[opt="servroot_tapping"] string opts.prefix the prefix of the mock server
+-- @tparam[opt="_"] string opts.hostname the hostname of the mock server
+-- @tparam[opt=false] bool opts.tls whether to use tls
+-- @tparam[opt={}] table opts.directives the extra directives of the mock server
+-- @tparam[opt={}] table opts.log_opts the options for logging with fields listed below:
+-- @tparam[opt=true] bool opts.log_opts.collect_req whether to log requests()
+-- @tparam[opt=true] bool opts.log_opts.collect_req_body_large whether to log large request bodies
+-- @tparam[opt=false] bool opts.log_opts.collect_resp whether to log responses
+-- @tparam[opt=false] bool opts.log_opts.collect_resp_body whether to log response bodies
+-- @tparam[opt=true] bool opts.log_opts.collect_err: whether to log errors
+-- @treturn http_mock a mock instance
+-- @treturn string the port the mock server listens to
 -- @usage
 -- local mock = http_mock.new(8000, [[
 --   ngx.req.set_header("X-Test", "test")
@@ -77,7 +89,7 @@ end
 -- client:send({})
 -- local logs = mock:retrieve_mocking_logs() -- get all the logs of HTTP sessions
 -- mock:stop()
--- 
+--
 -- listens can be a number, which will be used as the port of the mock server;
 -- or a string, which will be used as the param of listen directive of the mock server;
 -- or a table represents multiple listen ports.
@@ -101,18 +113,6 @@ end
 --   },
 -- }
 -- or a string, which will be used as the access phase handler.
---
--- opts:
--- prefix: the prefix of the mock server, defaults to "servroot_tapping"
--- hostname: the hostname of the mock server, defaults to "_"
--- directives: the extra directives of the mock server, defaults to {}
--- log_opts: the options for logging with fields listed below:
---   collect_req: whether to log requests(), defaults to true
---   collect_req_body_large: whether to log large request bodies, defaults to true
---   collect_resp: whether to log responses, defaults to false
---   collect_resp_body: whether to log response bodies, defaults to false
---   collect_err: whether to log errors, defaults to true
--- tls: whether to use tls, defaults to false
 function http_mock.new(listens, routes, opts)
   opts = opts or {}
 
@@ -137,7 +137,7 @@ function http_mock.new(listens, routes, opts)
       }
     }
   end
-  
+
   opts.log_opts = opts.log_opts or {}
   local log_opts = opts.log_opts
   default_field(log_opts, "req", true)
@@ -177,6 +177,8 @@ function http_mock.new(listens, routes, opts)
   return _self, port
 end
 
+--- returns the default port of the mock server.
+-- @treturn string the port of the mock server (first listen directive)
 function http_mock:get_default_port()
   return self.listens[1]:match(":(%d+)")
 end
